@@ -1,0 +1,107 @@
+# 更新日志 / Changelog
+
+## 简体中文
+
+### 3.2.9 (2026-07-21)
+
+- 大幅加快价格库打开速度：多次扫描后再打开价格库，不再卡好几秒才弹出
+- 浏览拍卖行更流畅：搜索、翻页时插件后台处理做了合并优化，减少掉帧
+- 数据清理改为每天最多一次，扫描开始前不再因清理旧数据而卡顿
+- 修复全量扫描后可能存下"物品名为空"的无效记录，现在自动拦截写入，已有脏数据会在每日清理时移除
+- 修正待售物品列表及在售物品列表显示框体尺寸
+
+### 3.2.7 (2026-07-19)
+
+- 修复全量扫描超过 5 秒时，正常结果事件与超时兜底可能重复启动扫描和保存任务的问题
+- 全量扫描加入会话失效保护，拍卖行关闭后不再执行残留的批处理、物品加载或保存回调
+- 隔离全量扫描留下的拍卖快照，避免扫描完成后迟到事件重复遍历巨量结果导致游戏卡顿或假死
+
+### 3.2.5 (2026-07-19)
+
+- 修复购物清单导出文本重新粘贴时提示表头格式错误的问题
+- 购物清单物品输入支持带双引号的物品名，例如 "铜矿石"
+- 购物清单新增"圆圆的笔记本"下载入口，可快速复制插件下载地址
+- 完善购物清单第三方 API：新增安全复制格式导出，补齐能力限制、回调契约和接口文档
+- 修复文本导入绕过物品数量上限，以及超长清单名称自动重名后无法重新加载的问题
+- 修复购物清单本次购买进度、库存和缺口数据刷新不准确的问题
+- 修复 EasyAuction 设置页层级错误，避免窗口遮挡和交互异常
+
+### 3.2.4 (2026-07-19)
+
+- 移除买入助手模块
+- 新增购物清单：支持多清单、物品名/ID 添加、导入导出和第三方插件导入接口
+- 新增购物清单详情：显示采购进度、背包库存、缺口成本和本次购买明细
+- 修复弹窗错误，避免影响系统其他弹窗样式
+
+### 3.2.2 (2026-07-08)
+
+- 修改界面缩放默认值改为 100%
+- 修复闪卖页放入物品后图标过大、超出边框的问题
+
+### 3.2.1 (2026-07-03)
+
+- 默认界面改为"暴雪默认风格"，更接近游戏原生窗口
+- 主题切换改成下拉选择，不用再一下一下循环切换
+- 优化金币账单和价格走势窗口：账单金额更稳，走势窗口不会被价格库挡住
+- 修正一些界面细节：按钮选中更明显，涨跌榜表头更清楚，低价价格显示更准确
+
+### 3.2.0 (2026-07-02)
+
+- 新增 EasyAuction Pro 功能：策略上架队列、策略模板、策略组、单物品/分类绑定和建议价计算
+- Pro 买入助手加入补货扫描和策略狙击，可按库存目标、最高买入价、风险限制和策略低价规则筛选当前浏览结果
+- Pro 运营维护与账本增强：辅助检查我的拍卖、低于底价或被压价的条目，并记录轻量成交、购买、流拍汇总
+- 购买风控确认弹窗会明确显示本次一口价，避免超过警戒线时确认框金额为空
+
+---
+
+## English
+
+### 3.2.9 (2026-07-21)
+
+- Significantly improved price database opening speed
+- Smoother auction browsing with merged background processing
+- Data cleanup now runs at most once per day
+- Fixed invalid empty item name records from full scan
+- Fixed display size for sell list and my auctions list
+
+### 3.2.7 (2026-07-19)
+
+- Fixed duplicate scan/save tasks when full scan exceeds 5 seconds
+- Added session invalidation protection for full scan
+- Isolated auction snapshots to prevent late events causing lag
+
+### 3.2.5 (2026-07-19)
+
+- Fixed shopping list export text re-paste format error
+- Added support for quoted item names in shopping lists
+- Added "圆圆笔记本" download entry for shopping lists
+- Improved shopping list third-party API
+- Fixed text import bypassing quantity limits
+- Fixed purchase progress and inventory refresh issues
+- Fixed settings frame level error
+
+### 3.2.4 (2026-07-19)
+
+- Removed buy assistant module
+- Added shopping lists with import/export
+- Added shopping list details view
+- Fixed popup styling issues
+
+### 3.2.2 (2026-07-08)
+
+- Changed default UI scale to 100%
+- Fixed oversized item icon in quick sell panel
+
+### 3.2.1 (2026-07-03)
+
+- Changed default theme to "Blizzard Default Style"
+- Changed theme switch to dropdown selection
+- Improved gold ledger and price chart windows
+- Fixed UI details
+
+### 3.2.0 (2026-07-02)
+
+- Added EasyAuction Pro features: strategy posting queue, templates, groups
+- Pro buy assistant with restock scan and strategy sniper
+- Pro operations maintenance and ledger enhancements
+- Fixed purchase risk confirmation popup amount display

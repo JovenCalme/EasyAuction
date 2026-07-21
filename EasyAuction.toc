@@ -1,0 +1,28 @@
+## Interface: 38001
+## Title: |TInterface/Icons/INV_Misc_Coin_01:16:16:0:0|t |cff00ffffEasyAuction|r - |cff41bee3拍|r|cff4b7be5卖|r|cff4b7be5助|r|cff4b7be5手|r
+## Notes: 拍卖行增强，允许一键一口价，上架自动填写价格、历史价格查询等功能。
+## Author: 晓输童
+## Version: 3.2.9
+## SavedVariables: EasyAuctionDB2, EasyAuctionDB
+## X-License: MIT
+## X-Website: https://github.com/RingoChen/EasyAuction
+embeds.xml
+EasyAuction.xml
+Core/EasyAuctionStyle.lua
+Core/EasyAuction.lua
+Modules/EasyFrame.lua
+Modules/ChanceFrame.lua
+Modules/DisenchantValue.lua
+Config/ChangeLog.lua
+Modules/ChartFrame.lua
+Pro/ProCore.lua
+Pro/ProShoppingLists.lua
+Pro/ProShoppingInventory.lua
+Pro/ProShoppingRuntime.lua
+Pro/ProGroups.lua
+Pro/ProLedger.lua
+Pro/ProAuctionOps.lua
+Pro/ProStrategyEditor.lua
+Pro/ProMaintenance.lua
+Pro/ProBuyFrame.lua
+Pro/ProPostQueue.lua

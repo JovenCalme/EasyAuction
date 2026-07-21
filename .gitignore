@@ -1,0 +1,43 @@
+# WoW Addon Cache Files
+*.lua.bak
+*.lua.cache
+*.toc.bak
+
+# WoW SavedVariables
+*.db
+SavedVariables/
+
+# WTF Directory
+WTF/
+
+# IDE/Editor Configuration
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.history/
+.DS_Store
+
+# Build/Release Artifacts
+*.zip
+*.rar
+dist/
+release/
+build/
+
+# Log Files
+*.log
+
+# Package Managers
+node_modules/
+vendor/
+
+# OS Specific
+Thumbs.db
+
+# Development/Test Files
+dd_author.toc
+test/
+tests/
+spec/
