@@ -1167,7 +1167,25 @@ local function EasyAuction_CreateDefaultDB()
 end
 
 -- resetAllRealms=true 时清空 EasyAuctionDB2 下所有服务器-阵营数据。
+function ns.EA_CanResetSavedVariables()
+    local mail = ns.Mail
+    local arbiter = mail and mail.WriteArbiter
+    if arbiter and type(arbiter.CanResetDatabase) == "function" then
+        return arbiter:CanResetDatabase()
+    end
+    local owner = arbiter and type(arbiter.GetOwner) == "function" and arbiter:GetOwner() or nil
+    if owner then
+        local errorObject = mail and type(mail.NewError) == "function"
+            and mail:NewError("MAIL_WRITE_BUSY", "当前有邮件操作正在进行，请等待操作结束后再重置插件。", owner)
+            or { code = "MAIL_WRITE_BUSY", message = "当前有邮件操作正在进行，请等待操作结束后再重置插件。", detail = owner }
+        return nil, errorObject
+    end
+    return true
+end
+
 function EasyAuction_ResetSavedVariables(resetAllRealms)
+    local allowed, resetError = ns.EA_CanResetSavedVariables()
+    if not allowed then return nil, resetError end
     local key = GetRealmFactionKey()
     EasyAuctionDB2 = type(EasyAuctionDB2) == "table" and EasyAuctionDB2 or {}
     if resetAllRealms then
@@ -1260,12 +1278,17 @@ StaticPopupDialogs["EASYAUCTION_DB_RESET_PROMPT"] = {
     button1 = "重置并重载",
     button2 = "保留现有数据",
     OnAccept = function()
-        ns.EA_MarkDBResetPromptDone()
         if type(EasyAuction_ResetSavedVariables) == "function" then
-            EasyAuction_ResetSavedVariables(true)
+            local newDB, resetError = EasyAuction_ResetSavedVariables(true)
+            if not newDB then
+                print("|cffff4040EasyAuction|r：" .. tostring(resetError and resetError.message
+                    or "当前无法重置插件。"))
+                return
+            end
         end
+        ns.EA_MarkDBResetPromptDone()
         print("|cff00ff00[EasyAuction]|r 已重置数据库，正在重载界面。")
-        ReloadUI()
+        if type(ReloadUI) == "function" then ReloadUI() end
     end,
     OnCancel = function(self, data)
         ns.EA_MarkDBResetPromptDone()
@@ -4034,24 +4057,15 @@ resetBtn:SetScript("OnClick", function()
         button1 = "确定",
         button2 = "取消",
         OnAccept = function()
-            EasyAuctionDB = EasyAuction_ResetSavedVariables(true)
-
-            if EasyAuctionDBFrame and EasyAuctionDBFrame:IsShown() then
-                RefreshDBFrame()
+            local newDB, resetError = EasyAuction_ResetSavedVariables(true)
+            if not newDB then
+                print("|cffff4040EasyAuction|r：" .. tostring(resetError and resetError.message
+                    or "当前无法重置插件。"))
+                return
             end
-            if AuctionBar and AuctionBar.AuctionFrame then
-                AuctionBar.AuctionFrame:RefreshBagItemFrame()
-                AuctionBar.AuctionFrame:RefreshMyAuctionList()
-            end
-            if type(RefreshRecentSearchRows) == "function" then RefreshRecentSearchRows() end
-            if type(RefreshFavoriteRows) == "function" then RefreshFavoriteRows() end
-            if type(RefreshMinPriceLines) == "function" then RefreshMinPriceLines() end
-            if type(EasyAuction_UpdateInlineDistribution) == "function" then
-                EasyAuction_UpdateInlineDistribution(nil,
-                    nil)
-            end
-            if type(UpdateTrendFrame) == "function" then UpdateTrendFrame(nil) end
-            print("|cff00ff00EasyAuction|r：所有设置与历史数据已重置。")
+            EasyAuctionDB = newDB
+            print("|cff00ff00EasyAuction|r：所有设置与历史数据已重置，正在重载界面。")
+            if type(ReloadUI) == "function" then ReloadUI() end
         end,
         timeout = 0,
         whileDead = true,
@@ -7426,7 +7440,7 @@ HookTooltipMethods()
 -- =========================================================================================
 -- 拍卖行搜索框防污染 / 防限流模块（由 AHFix 移植精简）
 -- 独立 do...end 作用域隔离，避免污染核心数据层；仅监听拍卖行相关事件，不依赖既有逻辑。
--- 原理：借助 issecurevalue 影子判定区分「玩家手输 / 暴雪原生 / 第三方污染」三态，
+-- 原理：结合文本安全标记与相关全局的具名污染源，区分「玩家手输 / 暴雪原生 / 第三方污染」三态，
 --       污染时锁死搜索通道并引导 Ctrl+C → Ctrl+V 洗白，已触发限流则提示 /reload。
 -- =========================================================================================
 ;(function()
@@ -7434,8 +7448,10 @@ HookTooltipMethods()
     local IsCtrl = _G.IsControlKeyDown
     local IsShift = _G.IsShiftKeyDown
     local IsSecure = _G.issecurevalue
+    local IsSecureVariable = _G.issecurevariable
     local HookSecure = _G.hooksecurefunc
     local Errors = _G.UIErrorsFrame
+    local FORCE_TAINT = "*** ForceTaint_Strong ***"
 
     -- 状态：state 当前状态 / taint 污染源 / paste 洗白阶段 / hooked 是否已挂钩
     local S = { state = "WAITING", taint = "None", paste = "NONE", hooked = false }
@@ -7445,6 +7461,52 @@ HookTooltipMethods()
     local Hook
     local EnsureStatusText
     local UpdateUI
+
+    local function NamedTaint(taint)
+        if taint ~= nil and taint ~= "nil" and taint ~= FORCE_TAINT and taint ~= "EasyAuction" then
+            return taint
+        end
+    end
+
+    local function MailboxTaint(taint)
+        if taint == "Postal" or taint == "InboxMailBag" then
+            return taint
+        end
+    end
+
+    -- Titan 原生 Shift 点击即使没有第三方插件也可能标记 ForceTaint_Strong；
+    -- 只有相关全局同时带有具名邮箱插件污染时，才将其判为不安全。
+    local function GetMailboxSearchTaint()
+        local modifiedClick = _G.ContainerFrameItemButton_OnModifiedClick
+        if modifiedClick then
+            if type(IsSecureVariable) == "function" then
+                local variableSecure, variableTaint = IsSecureVariable("ContainerFrameItemButton_OnModifiedClick")
+                if not variableSecure then
+                    local taint = MailboxTaint(variableTaint)
+                    if taint then return taint end
+                end
+            end
+
+            local valueSecure, valueTaint = IsSecure(modifiedClick)
+            if not valueSecure then
+                local taint = MailboxTaint(valueTaint)
+                if taint then return taint end
+            end
+        end
+
+        local searchBars = _G.ITEM_SEARCHBAR_LIST
+        if type(searchBars) == "table" then
+            for i = 1, #searchBars do
+                local searchBarName = searchBars[i]
+                if searchBarName == "InboxMailbagFrameItemSearchBox" then
+                    local valueSecure, valueTaint = IsSecure(searchBarName)
+                    if not valueSecure then
+                        return MailboxTaint(valueTaint) or "InboxMailBag"
+                    end
+                end
+            end
+        end
+    end
 
     local function IsEnabled()
         return not EasyAuctionDB or EasyAuctionDB.enableSearchBoxProtection ~= false
@@ -7551,7 +7613,7 @@ HookTooltipMethods()
             end
         end)
 
-        -- 原生搜索框文本变化：影子判定三态
+        -- 原生搜索框文本变化：按输入来源和污染标记判定三态
         name:HookScript("OnTextChanged", function(self, byUser)
             if not IsEnabled() then
                 DisableUI()
@@ -7564,20 +7626,29 @@ HookTooltipMethods()
                 overlayEdit:Hide()
             else
                 local isReal, taintReal = IsSecure(txt)
-                local _, taintCopy = IsSecure("" .. txt)  -- 高阶指纹影子判定
-                if byUser or IsShift() or isReal or (taintCopy == nil) then
-                    S.state, S.taint, S.paste = byUser and "SAFE_USER" or "SAFE_BLIZZARD", "None", "NONE"
+                if byUser then
+                    S.state, S.taint, S.paste = "SAFE_USER", "None", "NONE"
                     overlayEdit:Hide()
-                elseif taintReal ~= nil and taintReal ~= "nil" and taintReal ~= "*** ForceTaint_Strong ***" then
-                    S.state, S.taint, S.paste = "WARNING", taintReal, "NEED_COPY"
-                    self:ClearFocus()
-                    overlayEdit:SetText(txt)
-                    overlayEdit:Show()
-                    overlayEdit:SetFocus()
-                    overlayEdit:HighlightText()
                 else
-                    S.state, S.taint, S.paste = "SAFE_BLIZZARD", "None", "NONE"
-                    overlayEdit:Hide()
+                    local mailboxTaint = MailboxTaint(taintReal) or GetMailboxSearchTaint()
+                    if mailboxTaint then
+                        S.state, S.taint, S.paste = "WARNING", mailboxTaint, "NEED_COPY"
+                        self:ClearFocus()
+                        overlayEdit:SetText(txt)
+                        overlayEdit:Show()
+                        overlayEdit:SetFocus()
+                        overlayEdit:HighlightText()
+                    elseif isReal or IsShift() or taintReal == FORCE_TAINT or taintReal == "EasyAuction" then
+                        S.state, S.taint, S.paste = "SAFE_BLIZZARD", "None", "NONE"
+                        overlayEdit:Hide()
+                    else
+                        S.state, S.taint, S.paste = "WARNING", NamedTaint(taintReal) or "Unknown", "NEED_COPY"
+                        self:ClearFocus()
+                        overlayEdit:SetText(txt)
+                        overlayEdit:Show()
+                        overlayEdit:SetFocus()
+                        overlayEdit:HighlightText()
+                    end
                 end
             end
             UpdateUI()

@@ -319,7 +319,7 @@ end
 
 local function EA_GetThemeName(key)
     local palette = EAStyle and EAStyle.Palettes and EAStyle.Palettes[key]
-    return (palette and palette.name) or key or "暴雪默认风格"
+    return (palette and palette.name) or key or "暴雪风格"
 end
 
 local function EA_UpdateThemeDropdownButton(button)
@@ -372,7 +372,7 @@ local function EA_ShowThemeDropdown(button)
     if not menu then
         menu = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
         menu.rows = {}
-        menu:SetFrameStrata("FULLSCREEN_DIALOG")
+        menu:SetFrameStrata("TOOLTIP")
         menu:SetToplevel(true)
         menu:EnableMouse(true)
         if menu.SetClampedToScreen then
@@ -405,6 +405,7 @@ local function EA_ShowThemeDropdown(button)
             end
         end)
     end
+    menu:SetFrameStrata("TOOLTIP")
     menu:SetSize(width, 12 + #order * (rowHeight + 2))
     menu:SetFrameLevel(math.max((button:GetFrameLevel() or 1) + 80, 80))
     for _, row in ipairs(menu.rows) do
@@ -420,7 +421,7 @@ end
 local function EA_SetThemeDropdownButton(button, compact)
     if not button then return button end
     button.__EAThemeCompact = compact and true or false
-    button.__EAThemeMenuWidth = 112
+    button.__EAThemeMenuWidth = 100
     if not button.__EAThemeDropdownRegistered then
         button.__EAThemeDropdownRegistered = true
         EA_ThemeDropdownButtons[#EA_ThemeDropdownButtons + 1] = button
@@ -1149,22 +1150,23 @@ local function CreateNumericBox(parent, width)
     edit.bg:SetAllPoints()
     if EAStyle then
         local p = EAStyle:Palette()
-        edit.bg:SetColorTexture(p.plot[1], p.plot[2], p.plot[3], 0.9)
+        local input = p.input or p.plot
+        edit.bg:SetColorTexture(input[1], input[2], input[3], 0.9)
     else
         edit.bg:SetColorTexture(0, 0, 0, 0.8)
     end
 
-    edit.border = edit:CreateTexture(nil, "BORDER")
-    edit.border:SetAllPoints()
+    EA_ApplyOutline(edit, 0.75)
     if EAStyle then
         EAStyle:OnTheme(function(p)
-            edit.bg:SetColorTexture(p.plot[1], p.plot[2], p.plot[3], 0.9)
-            edit.border:SetColorTexture(p.border[1], p.border[2], p.border[3], 0.75)
+            local input = p.input or p.plot
+            edit.bg:SetColorTexture(input[1], input[2], input[3], 0.9)
+            edit.__EAOutlineTop:SetColorTexture(p.border[1], p.border[2], p.border[3], 0.75)
+            edit.__EAOutlineBottom:SetColorTexture(p.border[1], p.border[2], p.border[3], 0.75)
+            edit.__EAOutlineLeft:SetColorTexture(p.border[1], p.border[2], p.border[3], 0.75)
+            edit.__EAOutlineRight:SetColorTexture(p.border[1], p.border[2], p.border[3], 0.75)
         end)
-    else
-        edit.border:SetColorTexture(1, 1, 1, 0.2)
     end
-    edit.border:SetDrawLayer("BORDER", 1)
 
     edit:SetTextInsets(4, 4, 0, 0)
     edit:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
@@ -1987,7 +1989,13 @@ function CreateEasyAuctionConfigFrame(parent)
             button2 = "取消",
             OnAccept = function()
                 if type(EasyAuction_ResetSavedVariables) == "function" then
-                    EasyAuctionDB = EasyAuction_ResetSavedVariables(true)
+                    local newDB, resetError = EasyAuction_ResetSavedVariables(true)
+                    if not newDB then
+                        print("|cffff4040EasyAuction|r：" .. tostring(resetError and resetError.message
+                            or "当前无法重置插件。"))
+                        return
+                    end
+                    EasyAuctionDB = newDB
                 else
                     EasyAuctionDB = {
                         bidDiscount = 0.99,
@@ -2025,23 +2033,8 @@ function CreateEasyAuctionConfigFrame(parent)
                     _G.EasyAuctionDB = EasyAuctionDB
                     _G.EasyAuctionDB2 = _G.EasyAuctionDB2 or {}
                 end
-
-                if EasyAuctionDBFrame and EasyAuctionDBFrame:IsShown() then
-                    RefreshDBFrame()
-                end
-                if AuctionBar and AuctionBar.AuctionFrame then
-                    AuctionBar.AuctionFrame:RefreshBagItemFrame()
-                    AuctionBar.AuctionFrame:RefreshMyAuctionList()
-                end
-                if type(RefreshRecentSearchRows) == "function" then RefreshRecentSearchRows() end
-                if type(RefreshFavoriteRows) == "function" then RefreshFavoriteRows() end
-                if type(RefreshMinPriceLines) == "function" then RefreshMinPriceLines() end
-                if type(EasyAuction_UpdateInlineDistribution) == "function" then
-                    EasyAuction_UpdateInlineDistribution(
-                        nil, nil)
-                end
-                if type(UpdateTrendFrame) == "function" then UpdateTrendFrame(nil) end
-                print("|cff00ff00EasyAuction|r：所有设置与历史数据已重置。")
+                print("|cff00ff00EasyAuction|r：所有设置与历史数据已重置，正在重载界面。")
+                if type(ReloadUI) == "function" then ReloadUI() end
             end,
             timeout = 0,
             whileDead = true,
@@ -2077,7 +2070,7 @@ function CreateEasyAuctionConfigFrame(parent)
         ShowRelatedAddonsPopup()
     end)
     local themeBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    themeBtn:SetSize(112, 24)
+    themeBtn:SetSize(80, 24)
     themeBtn:SetPoint("BOTTOMLEFT", relatedBtn, "TOPLEFT", 0, 10)
     EA_SkinButton(themeBtn)
     EA_SetThemeDropdownButton(themeBtn, false)

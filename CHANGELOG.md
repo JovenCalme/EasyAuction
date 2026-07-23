@@ -2,6 +2,19 @@
 
 ## 简体中文
 
+### 3.3.0 (2026-07-23)
+
+- 新增 EasyAuction 邮箱助手，可在插件设置中随时开启或关闭
+- 新增“邮包”页面，可自动整理同类物品，并支持搜索、金币汇总、到期提醒和滚动浏览
+- 付款取件邮件继续通过游戏原生收件箱处理，避免整理邮件时误付金币
+- 发件箱新增最近邮寄、联系人、小号、好友、公会成员和自定义分组名单
+- 新增收件人管理、用户分组和黑名单，联系人维护更加方便
+- 新增快捷附件分类，可一键放入矿石、草药、布料、消耗品等常用物品
+- 新增批量金币邮寄，可多选收件人、自动计算总金额并查看每个人的发送结果
+- 新增批量发送记录和失败重试，已经发送成功的角色不会被重复发送
+- 检测到 Postal 或 InboxMailBag 时，可选择继续使用、关闭 EasyAuction 邮箱助手，或直接禁用冲突插件并重新载入界面
+- 优化邮箱布局和页面切换，修复尺寸、重叠、名单显示及金币提示问题
+
 ### 3.2.9 (2026-07-21)
 
 - 大幅加快价格库打开速度：多次扫描后再打开价格库，不再卡好几秒才弹出
@@ -55,6 +68,19 @@
 ---
 
 ## English
+
+### 3.3.0 (2026-07-23)
+
+- Added an EasyAuction mail assistant that can be enabled or disabled from addon settings
+- Added a Mail Bag page that organizes matching items and supports search, money summaries, expiry reminders, and scrolling
+- Kept COD mail in Blizzard's native inbox to help prevent accidental payments
+- Added quick recipient lists for recent mail, contacts, alts, friends, guild members, and custom groups
+- Added recipient management, custom groups, and a sending blacklist
+- Added quick attachment categories for commonly mailed items
+- Added bulk gold mailing with multi-select recipients, automatic total calculation, and per-recipient results
+- Added saved bulk-mail history and safe retry for failed recipients without resending successful mail
+- Added a clear choice to continue, disable EasyAuction Mail, or disable the conflicting Postal/InboxMailBag add-on and reload
+- Improved mailbox layout and fixed sizing, overlap, roster display, and money hint issues
 
 ### 3.2.9 (2026-07-21)
 

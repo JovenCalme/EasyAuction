@@ -2,15 +2,50 @@
 ## Title: |TInterface/Icons/INV_Misc_Coin_01:16:16:0:0|t |cff00ffffEasyAuction|r - |cff41bee3拍|r|cff4b7be5卖|r|cff4b7be5助|r|cff4b7be5手|r
 ## Notes: 拍卖行增强，允许一键一口价，上架自动填写价格、历史价格查询等功能。
 ## Author: 晓输童
-## Version: 3.2.9
+## Version: 3.3.0
 ## SavedVariables: EasyAuctionDB2, EasyAuctionDB
 ## X-License: MIT
-## X-Website: https://github.com/RingoChen/EasyAuction
+## X-Website: https://github.com/JovenCalme/EasyAuction
 embeds.xml
 EasyAuction.xml
 Core/EasyAuctionStyle.lua
 Core/EasyAuction.lua
 Modules/EasyFrame.lua
+Modules/Mail/MailNamespace.lua
+Modules/Mail/MailConfig.lua
+Modules/Mail/MailCompat.lua
+Modules/Mail/MailSkinCompat.lua
+Modules/Mail/MailWriteArbiter.lua
+Modules/Mail/MailSession.lua
+Modules/Mail/MailFrameHost.lua
+Modules/Mail/InboxRepository.lua
+Modules/Mail/InboxAggregator.lua
+Modules/Mail/InboxSearch.lua
+Modules/Mail/InboxOperationQueue.lua
+Modules/Mail/InboxPresenter.lua
+Modules/Mail/InboxTooltipBuilder.lua
+Modules/Mail/InboxView.lua
+Modules/Mail/InboxController.lua
+Modules/Mail/RecipientRepository.lua
+Modules/Mail/RecipientGroupRepository.lua
+Modules/Mail/RecipientSuggestions.lua
+Modules/Mail/BagScanner.lua
+Modules/Mail/AttachmentService.lua
+Modules/Mail/MoneySubjectFormatter.lua
+Modules/Mail/SendTransaction.lua
+Modules/Mail/ComposeController.lua
+Modules/Mail/QuickAttachController.lua
+Modules/Mail/ComposeRuntime.lua
+Modules/Mail/BulkRosterProviders.lua
+Modules/Mail/BulkSelectionModel.lua
+Modules/Mail/BulkHistoryRepository.lua
+Modules/Mail/BulkSendCoordinator.lua
+Modules/Mail/BulkMailView.lua
+Modules/Mail/BulkMailController.lua
+Modules/Mail/MailModuleController.lua
+Modules/Mail/MailConflictDetector.lua
+Modules/Mail/MailSettings.lua
+Modules/Mail/MailBootstrap.lua
 Modules/ChanceFrame.lua
 Modules/DisenchantValue.lua
 Config/ChangeLog.lua

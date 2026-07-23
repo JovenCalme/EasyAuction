@@ -85,11 +85,12 @@ Style.Palettes = {
     },
     blizzard = {
         key = "blizzard",
-        name = "暴雪默认风格",
+        name = "暴雪风格",
         blizzard = true,
         bg = { 0.09, 0.07, 0.04 },
         panel = { 0.02, 0.02, 0.02 },
         plot = { 0.00, 0.00, 0.00 },
+        input = hex("1A120A"),
         border = { 0.78, 0.64, 0.33 },
         backdropTint = { 1, 1, 1 },
         text = hex("FFFFFF"),
@@ -111,7 +112,7 @@ Style.Palettes = {
     },
     lunar = {
         key = "lunar",
-        name = "月光交易所",
+        name = "月光驿站",
         bg = hex("1A1C23"),
         panel = hex("23262F"),
         plot = hex("151821"),
@@ -896,7 +897,8 @@ function Style:SkinEditBox(box)
                     if box.SetBackdrop then
                         box:SetBackdrop(self.BLIZZARD_PANEL_BACKDROP)
                     end
-                    box:SetBackdropColor(0, 0, 0, 0.82)
+                    local input = p.input or p.plot
+                    box:SetBackdropColor(input[1], input[2], input[3], 0.96)
                     box:SetBackdropBorderColor(p.border[1], p.border[2], p.border[3], 0.85)
                 end
             elseif p.legacy then

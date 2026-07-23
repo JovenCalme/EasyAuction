@@ -1,0 +1,67 @@
+## Interface: 30405, 38001
+## Title: NoWCL
+## Notes: WCL-aligned combat stats and raid audit for WoW Titan Reforged Classic
+## Notes-zhCN: WCL 对齐的战斗统计与团队审计(国服时光服)
+## Author: Web3SkyCity
+## Version: 1.2.0.224
+## SavedVariables: NoWCLDB, NoWCLRaidManagementDB
+## X-Category: Combat
+## IconTexture: Interface\AddOns\NoWCL\Media\logo.tga
+
+Libs\libs.xml
+Core\Core.lua
+Core\ReleaseProtection.lua
+Core\ExtensionAPI.lua
+Core\SafeChat.lua
+Core\Util.lua
+Core\GroupPublisher.lua
+Core\AnnouncementElection.lua
+Core\DeathNotice.lua
+Core\TeamAnnouncements.lua
+Core\WCLRuntime.lua
+Core\Rules.lua
+Core\Readiness.lua
+Core\AzerothHistory.lua
+Core\DetailStats.lua
+Core\TeamBuffs.lua
+Core\ConsumableCheck.lua
+Core\Stats.lua
+Core\Comm.lua
+Core\Sync.lua
+Core\RaidAutoClear.lua
+Core\Parser.lua
+UI\Style.lua
+UI\GearInspectPanel.lua
+UI\PrimaryPageRegistry.lua
+UI\Appearance.lua
+UI\MainWindow.lua
+UI\StatsConfig.lua
+UI\TaskConfig.lua
+UI\TeamBuffConfig.lua
+UI\AzerothPage.lua
+UI\TeamAnnouncementPanel.lua
+UI\AuditPage.lua
+UI\MiniWindow.lua
+UI\Launcher.lua
+UI\Toast.lua
+
+RaidManagement\Core\Bootstrap.lua
+RaidManagement\Core\Util.lua
+RaidManagement\Data\Maps.lua
+RaidManagement\Data\Tactics.lua
+RaidManagement\Domain\Plan.lua
+RaidManagement\Domain\Assignment.lua
+RaidManagement\Domain\Review.lua
+RaidManagement\Runtime\EncounterContext.lua
+RaidManagement\Runtime\Recorder.lua
+RaidManagement\Runtime\Transport.lua
+RaidManagement\Runtime\SnapshotCodec.lua
+RaidManagement\Runtime\Sync.lua
+RaidManagement\UI\MainPage.lua
+## X-NoWCL-Build: 1.2.0.224+2381fa1f0dd0-dirty
+## X-NoWCL-Git: 2381fa1f0dd0
+## X-NoWCL-Build-Time: 2026-07-22T17:46:12Z
+## X-NoWCL-Fingerprint: f6c90f981aae41668808adedffc18976
+## X-NoWCL-Signature: hmac-sha256:a09ec1c906b3f4e30d6df9441799a51c5922a860ea63b15181d4e6d8a4ec4051
+## X-NoWCL-Protection: nowcl-rule-ir-v1
+## X-NoWCL-Copyright: Copyright (c) 2026 Web3SkyCity. All rights reserved.
