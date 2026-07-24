@@ -1033,7 +1033,8 @@ function BulkMailView:ConfirmStart()
         self:SetMode("history")
         return
     end
-    if self.batchState and self.batchState.state == "RUNNING" then return end
+    if self.batchState and (self.batchState.state == "RUNNING"
+        or self.batchState.state == "WAITING_SERVER") then return end
     if self.batchState and self.batchState.state == "WAITING_SECURE_CONFIRM" then
         self:ShowError({ code = "SECURE_CONFIRM_PENDING", message = "请先处理原生安全转账确认框" })
         return
@@ -1280,6 +1281,7 @@ function BulkMailView:SetBatchState(state)
     end
     local text = "开始批量邮寄"
     if state.state == "RUNNING" then text = string.format("发送中 %d/%d", state.completedCount or 0, state.totalCount or 0)
+    elseif state.state == "WAITING_SERVER" then text = "等待邮件服务器"
     elseif state.state == "WAITING_USER_ACTION" then text = "继续发送下一封"
     elseif state.state == "PAUSED" or state.state == "STOPPED" then text = "已暂停"
     elseif state.state == "COMPLETED" or state.state == "PARTIAL" then text = "完成，查看记录" end

@@ -32,6 +32,100 @@ Mail._subscribers = Mail._subscribers or {}
 Mail._runtimeModules = Mail._runtimeModules or {}
 Mail._runtimeModuleById = Mail._runtimeModuleById or {}
 
+local REALM_ROMAN_SUFFIXES = {
+    { "VIII", "8" }, { "VII", "7" }, { "III", "3" },
+    { "VI", "6" }, { "IV", "4" }, { "II", "2" }, { "IX", "9" },
+    { "X", "10" }, { "V", "5" }, { "I", "1" },
+}
+local REALM_LOCALIZED_SUFFIXES = {
+    { "Ⅷ", "8" }, { "Ⅶ", "7" }, { "Ⅲ", "3" },
+    { "Ⅵ", "6" }, { "Ⅳ", "4" }, { "Ⅱ", "2" }, { "Ⅸ", "9" },
+    { "Ⅹ", "10" }, { "Ⅴ", "5" }, { "Ⅰ", "1" },
+    { "十", "10" }, { "九", "9" }, { "八", "8" }, { "七", "7" }, { "六", "6" },
+    { "五", "5" }, { "四", "4" }, { "三", "3" }, { "二", "2" }, { "一", "1" },
+}
+
+local function hasNonASCII(value)
+    for index = 1, #value do
+        if string.byte(value, index) > 127 then return true end
+    end
+    return false
+end
+
+local function timeRealmBase(value)
+    local prefix = "时光"
+    if value:sub(1, #prefix) ~= prefix then return nil end
+    local remainder = value:sub(#prefix + 1)
+    local upper = string.upper(remainder)
+    for index = 1, #REALM_ROMAN_SUFFIXES do
+        local numeral = REALM_ROMAN_SUFFIXES[index][1]
+        if upper:sub(1, #numeral) == numeral then
+            return prefix .. remainder:sub(1, #numeral)
+        end
+    end
+    for index = 1, #REALM_LOCALIZED_SUFFIXES do
+        local numeral = REALM_LOCALIZED_SUFFIXES[index][1]
+        if remainder:sub(1, #numeral) == numeral then
+            return prefix .. numeral
+        end
+    end
+end
+
+function Mail.NormalizeRealmToken(value)
+    if type(value) ~= "string" then return "" end
+    value = value:gsub("^%s+", ""):gsub("%s+$", "")
+    local decoratedBase = value:match("^(.-)%s+%-%s+.+$")
+    if decoratedBase and decoratedBase ~= "" then value = decoratedBase end
+    value = value:gsub("%s+", "")
+    return timeRealmBase(value) or value
+end
+
+function Mail.NormalizeRealmKey(value)
+    local token = Mail.NormalizeRealmToken(value)
+    if token == "" then return "" end
+    local upper = string.upper(token)
+    for index = 1, #REALM_ROMAN_SUFFIXES do
+        local suffix, replacement = unpack(REALM_ROMAN_SUFFIXES[index])
+        if #upper > #suffix and upper:sub(-#suffix) == suffix then
+            local prefix = token:sub(1, #token - #suffix)
+            if hasNonASCII(prefix) then return string.lower(prefix .. replacement) end
+        end
+    end
+    for index = 1, #REALM_LOCALIZED_SUFFIXES do
+        local suffix, replacement = unpack(REALM_LOCALIZED_SUFFIXES[index])
+        if #token > #suffix and token:sub(-#suffix) == suffix then
+            return string.lower(token:sub(1, #token - #suffix) .. replacement)
+        end
+    end
+    return string.lower(token)
+end
+
+function Mail.IsSameRealm(left, right)
+    local leftKey = Mail.NormalizeRealmKey(left)
+    return leftKey ~= "" and leftKey == Mail.NormalizeRealmKey(right)
+end
+
+function Mail.GetCurrentRecipientRealm(api)
+    api = api or _G
+    if type(api.GetNormalizedRealmName) == "function" then
+        local ok, realm = pcall(api.GetNormalizedRealmName)
+        if ok and type(realm) == "string" and realm ~= "" then
+            return Mail.NormalizeRealmToken(realm)
+        end
+    end
+    if type(api.UnitName) == "function" then
+        local ok, _, realm = pcall(api.UnitName, "player")
+        if ok and type(realm) == "string" and realm ~= "" then
+            return Mail.NormalizeRealmToken(realm)
+        end
+    end
+    if type(api.GetRealmName) == "function" then
+        local ok, realm = pcall(api.GetRealmName)
+        if ok then return Mail.NormalizeRealmToken(realm) end
+    end
+    return ""
+end
+
 local function reportError(message)
     local text = "|cffff4040[EasyAuction 邮箱]|r " .. tostring(message)
     if _G.DEFAULT_CHAT_FRAME and type(_G.DEFAULT_CHAT_FRAME.AddMessage) == "function" then

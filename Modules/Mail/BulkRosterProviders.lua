@@ -14,7 +14,16 @@ local function clone(value)
 end
 
 local function realmToken(value)
+    if type(Mail.NormalizeRealmToken) == "function" then
+        return Mail.NormalizeRealmToken(value)
+    end
     return type(value) == "string" and value:gsub("%s+", "") or ""
+end
+
+
+local function isSameRealm(left, right)
+    if type(Mail.IsSameRealm) == "function" then return Mail.IsSameRealm(left, right) end
+    return string.lower(realmToken(left)) == string.lower(realmToken(right))
 end
 
 local function recipientKey(name, realm, currentRealm)
@@ -24,22 +33,32 @@ local function recipientKey(name, realm, currentRealm)
         if shortName and suffix then name, realm = shortName, suffix end
     end
     realm = realmToken(realm or currentRealm)
-    local sendName = name .. (realm ~= "" and ("-" .. realm) or "")
-    return string.lower(sendName:gsub("%s+", ""))
+    local normalizedRealm = type(Mail.NormalizeRealmKey) == "function"
+        and Mail.NormalizeRealmKey(realm) or string.lower(realm)
+    local normalizedName = string.lower(name:gsub("%s+", ""))
+    return normalizedName .. (normalizedRealm ~= "" and ("-" .. normalizedRealm) or "")
 end
 
 local function normalizeMember(value, sourceKind, currentRealm, currentKey)
     if type(value) ~= "table" then return nil end
     local name = value.name or value.displayName
     if type(name) ~= "string" or name == "" then return nil end
-    local realm = realmToken(value.realm or currentRealm)
-    local sendName = value.sendName or name .. (realm ~= "" and ("-" .. realm) or "")
+    local suppliedRealm = value.realm
+    if not suppliedRealm then
+        local shortName, suffix = name:match("^([^-]+)%-(.+)$")
+        if shortName and suffix then name, suppliedRealm = shortName, suffix end
+    end
+    local realm = realmToken(suppliedRealm or currentRealm)
+    local sendName = name
+    if realm ~= "" and (currentRealm == "" or not isSameRealm(realm, currentRealm)) then
+        sendName = name .. "-" .. realm
+    end
     local result = clone(value)
     result.name = name
     result.realm = realm ~= "" and realm or nil
     result.sendName = sendName
     result.displayName = value.displayName or name
-    result.recipientKey = value.recipientKey or string.lower(sendName:gsub("%s+", ""))
+    result.recipientKey = recipientKey(name, realm, currentRealm)
     result.source = sourceKind
     result.isSelf = value.isSelf == true or (currentKey ~= nil and result.recipientKey == currentKey)
     return result

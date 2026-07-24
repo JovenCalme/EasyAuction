@@ -144,7 +144,7 @@ function View:_createFrames(parent)
     invoke(self.summaryText, "SetText", "")
 
     local categoryOptions = {
-        { id = "all", label = "全部", tooltip = "显示全部包裹物品" },
+        { id = "all", label = "全部", tooltip = "显示全部物品和金币" },
         { id = "money", label = "金币", tooltip = "只显示邮件中的金币" },
     }
     for index = 1, #(self.deps.categories or {}) do

@@ -2,6 +2,14 @@
 
 ## 简体中文
 
+### 3.3.2 (2026-07-24)
+
+- 修复闪收选择“全部”时遗漏邮件金币的问题，现在会同时显示物品和金币
+- 修复同服收件人自动附加服务器后缀、导致发件前需要额外确认的问题；跨服收件人仍保留服务器名
+- 修复闪寄批量金币邮件第一封成功后，第二封可能提示 `OUTBOUND_BUSY` 并暂停的问题；
+- 发件箱新增`Alt+左键`自动填入并一键发送所点击的物品，可在设置中开启，默认关闭；
+- 发件箱新增`Ctrl+左键`自动将点击的相同 itemID 的所有可邮寄物品填入到当前邮件；
+
 ### 3.3.0 (2026-07-23)
 
 - 新增 EasyAuction 邮箱助手，可在插件设置中随时开启或关闭
@@ -68,6 +76,14 @@
 ---
 
 ## English
+
+### 3.3.2 (2026-07-24)
+
+- Fixed the All inbox filter omitting attached gold; it now includes both items and money
+- Fixed same-realm recipients receiving an unnecessary realm suffix and confirmation prompt; cross-realm names remain fully qualified
+- Fixed bulk gold mail pausing with `OUTBOUND_BUSY` after the first successful message
+- Added optional `Alt+Left Click` quick attachment and one-click sending to the outbox; disabled by default
+- Added `Ctrl+Left Click` to attach every mailable bag item with the same item ID to the current message
 
 ### 3.3.0 (2026-07-23)
 

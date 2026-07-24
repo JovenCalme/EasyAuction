@@ -92,8 +92,7 @@ function Aggregator.Build(snapshot, settings)
     settings = settings or {}
     local groupStacks = settings.groupStacks ~= false
     local categoryId = settings.categoryId or "all"
-    local includeMoney = settings.categoryId == "money"
-        or (settings.categoryId == nil and settings.advanced == true)
+    local includeMoney = categoryId == "all" or categoryId == "money"
     local categoryRegistry = settings.categoryRegistry or Mail.ItemCategoryRegistry
     local entries = {}
     local grouped = {}

@@ -20,7 +20,20 @@ local function trim(value)
 end
 
 local function realmToken(value)
+    if type(Mail.NormalizeRealmToken) == "function" then
+        return Mail.NormalizeRealmToken(value)
+    end
     return trim(value):gsub("%s+", "")
+end
+
+local function isSameRealm(left, right)
+    if type(Mail.IsSameRealm) == "function" then return Mail.IsSameRealm(left, right) end
+    return string.lower(realmToken(left)) == string.lower(realmToken(right))
+end
+
+local function realmKey(value, casefold)
+    if type(Mail.NormalizeRealmKey) == "function" then return Mail.NormalizeRealmKey(value) end
+    return casefold(realmToken(value))
 end
 
 local function copyRecord(source)
@@ -89,7 +102,7 @@ function RecipientRepository:SetPlayerContext(context)
     end
     self.currentKey = self.casefold(name)
     if self.currentRealm ~= "" then
-        self.currentKey = self.currentKey .. "-" .. self.casefold(self.currentRealm)
+        self.currentKey = self.currentKey .. "-" .. realmKey(self.currentRealm, self.casefold)
     end
     return true
 end
@@ -115,11 +128,13 @@ function RecipientRepository:Normalize(value, source)
     end
 
     local foldedName = self.casefold(name)
-    local foldedRealm = self.casefold(realm)
+    local foldedRealm = realmKey(realm, self.casefold)
     local key = foldedName
     if foldedRealm ~= "" then key = key .. "-" .. foldedRealm end
     local sendName = name
-    if realm ~= "" then sendName = sendName .. "-" .. realm end
+    local sameRealm = self.currentRealm ~= ""
+        and isSameRealm(realm, self.currentRealm)
+    if realm ~= "" and not sameRealm then sendName = sendName .. "-" .. realm end
 
     local result = copyRecord(value)
     result.name = name
@@ -146,10 +161,22 @@ local function findByKey(records, key, normalize)
     end
 end
 
+local function matchingBlacklistKeys(repository, recipientKey)
+    local matches = {}
+    local blacklist = repository.storage.blacklist
+    for storedKey, record in pairs(blacklist.byKey) do
+        local normalized = repository:Normalize(record, "blacklist")
+        if storedKey == recipientKey or normalized and normalized.recipientKey == recipientKey then
+            matches[storedKey] = true
+        end
+    end
+    return matches
+end
+
 local function acceptsContext(record, context)
     if not context then return true end
     if context.faction and record.faction and context.faction ~= record.faction then return false end
-    if context.realm and record.realm and realmToken(context.realm) ~= realmToken(record.realm) then return false end
+    if context.realm and record.realm and not isSameRealm(context.realm, record.realm) then return false end
     return true
 end
 
@@ -199,7 +226,8 @@ end
 function RecipientRepository:IsBlacklisted(value)
     local normalized = self:Normalize(value, "blacklist")
     if not normalized then return false end
-    return self.storage.blacklist.byKey[normalized.recipientKey] ~= nil
+    if self.storage.blacklist.byKey[normalized.recipientKey] ~= nil then return true end
+    return next(matchingBlacklistKeys(self, normalized.recipientKey)) ~= nil
 end
 
 function RecipientRepository:AddBlacklist(value)
@@ -210,9 +238,13 @@ function RecipientRepository:AddBlacklist(value)
     end
     normalized.blockedAt = self.now()
     local blacklist = self.storage.blacklist
+    local matches = matchingBlacklistKeys(self, normalized.recipientKey)
+    for key in pairs(matches) do blacklist.byKey[key] = nil end
     blacklist.byKey[normalized.recipientKey] = copyRecord(normalized)
     for index = #blacklist.order, 1, -1 do
-        if blacklist.order[index] == normalized.recipientKey then table.remove(blacklist.order, index) end
+        if matches[blacklist.order[index]] or blacklist.order[index] == normalized.recipientKey then
+            table.remove(blacklist.order, index)
+        end
     end
     table.insert(blacklist.order, 1, normalized.recipientKey)
     return true
@@ -220,11 +252,15 @@ end
 
 function RecipientRepository:RemoveBlacklist(value)
     local normalized = self:Normalize(value, "blacklist")
-    if not normalized or not self.storage.blacklist.byKey[normalized.recipientKey] then return false end
+    if not normalized then return false end
     local blacklist = self.storage.blacklist
-    blacklist.byKey[normalized.recipientKey] = nil
+    local matches = matchingBlacklistKeys(self, normalized.recipientKey)
+    if next(matches) == nil then return false end
+    for key in pairs(matches) do blacklist.byKey[key] = nil end
     for index = #blacklist.order, 1, -1 do
-        if blacklist.order[index] == normalized.recipientKey then table.remove(blacklist.order, index) end
+        if matches[blacklist.order[index]] or blacklist.order[index] == normalized.recipientKey then
+            table.remove(blacklist.order, index)
+        end
     end
     return true
 end
@@ -307,14 +343,14 @@ function RecipientRepository:ListAlts(context)
             or not self.currentFaction or not normalized or not normalized.faction
             or normalized.faction == self.currentFaction
         local sameRealm = not normalized or not context.currentRealmOnly
-            or self.casefold(normalized.realm or "") == self.casefold(self.currentRealm)
+            or isSameRealm(normalized.realm, self.currentRealm)
         local visible = context.includeBlacklisted == true or not self:IsBlacklisted(normalized)
         if normalized and visible and sameFaction and sameRealm and acceptsContext(normalized, context)
             and not seen[normalized.recipientKey] then
             seen[normalized.recipientKey] = true
             local item = copyRecord(normalized)
             if includeAllFactions and item.realm and item.realm ~= "" then
-                item.displayName = item.sendName
+                item.displayName = item.name .. "-" .. item.realm
                 if item.faction and item.faction ~= "" then
                     item.displayName = item.displayName .. "-" .. item.faction
                 end

@@ -11,6 +11,14 @@ local BATCH_TERMINAL = { COMPLETED = true, PARTIAL = true, STOPPED = true, INTER
 local ITEM_TERMINAL = { SUCCEEDED = true, FAILED = true, UNKNOWN = true, CANCELLED = true, SKIPPED = true }
 local MAX_SAFE_INTEGER = 9007199254740991
 
+local function defaultSchedule(delay, callback)
+    if _G.C_Timer and type(_G.C_Timer.After) == "function" then
+        _G.C_Timer.After(delay, callback)
+        return true
+    end
+    return false
+end
+
 local function defaultMaximumAmount()
     local digits = tonumber(_G.MONEY_INPUT_MAX_GOLD_DIGITS) or 6
     return math.min(MAX_SAFE_INTEGER, (10 ^ digits) * 10000 - 1)
@@ -112,6 +120,8 @@ function BulkSendCoordinator.New(deps)
         generation = deps.generation or function() return 0 end,
         idFactory = deps.idFactory,
         now = deps.now or _G.time or os.time,
+        schedule = deps.schedule or defaultSchedule,
+        interSendDelay = tonumber(deps.interSendDelay) or 2,
         maxRecipients = tonumber(deps.maxRecipients) or 200,
         maxAmountEach = tonumber(deps.maxAmountEach) or defaultMaximumAmount(),
         autoContinue = deps.autoContinue ~= false,
@@ -120,7 +130,38 @@ function BulkSendCoordinator.New(deps)
         lease = nil,
         activeTransaction = nil,
         stopRequested = false,
+        waitSequence = 0,
     }, BulkSendCoordinator)
+end
+
+function BulkSendCoordinator:_invalidateServerWait()
+    self.waitSequence = self.waitSequence + 1
+end
+
+function BulkSendCoordinator:_pauseForOutboundBusy(item)
+    self.batch.state = "PAUSED"
+    self:_updateItem(item, "PENDING",
+        newError("OUTBOUND_BUSY", "邮件服务器仍在处理上一项操作，请稍后继续"))
+    return false
+end
+
+function BulkSendCoordinator:_continueAfterServerDelay(token)
+    if token ~= self.waitSequence or not self.batch or BATCH_TERMINAL[self.batch.state] then return false end
+    if self.stopRequested then return self:_cancelRemainingAndFinish() end
+    self:_invalidateServerWait()
+    return self:_prepareCurrent(true)
+end
+
+function BulkSendCoordinator:_scheduleNextRecipient()
+    self:_invalidateServerWait()
+    local token = self.waitSequence
+    self.batch.state = "WAITING_SERVER"
+    self:_notify()
+    local scheduled = self.schedule(self.interSendDelay, function()
+        self:_continueAfterServerDelay(token)
+    end)
+    if scheduled then return true end
+    return self:_pauseForOutboundBusy(self.batch.recipients[self.batch.currentIndex])
 end
 
 function BulkSendCoordinator:_newId(prefix)
@@ -306,6 +347,7 @@ function BulkSendCoordinator:Start(draft)
     self.batch.postageEach = validation.postageEach
     self.stopRequested = false
     self.activeTransaction = nil
+    self:_invalidateServerWait()
     self:_notify()
     self:_prepareCurrent()
     return batchId
@@ -336,15 +378,13 @@ function BulkSendCoordinator:_onTransactionTimeout(snapshot)
     self:_stopAfterUnknown()
 end
 
-function BulkSendCoordinator:_prepareCurrent()
+function BulkSendCoordinator:_prepareCurrent(skipCommandPending)
     if not self.batch or BATCH_TERMINAL[self.batch.state] then return false end
     if self.stopRequested then return self:_cancelRemainingAndFinish() end
     local item = self.batch.recipients[self.batch.currentIndex]
     if not item then return self:_finishFromResults() end
-    if self.compat.IsCommandPending and self.compat:IsCommandPending() then
-        self.batch.state = "PAUSED"
-        self:_updateItem(item, "FAILED", newError("OUTBOUND_BUSY", "邮件服务器仍在处理上一项操作"))
-        return false
+    if not skipCommandPending and self.compat.IsCommandPending and self.compat:IsCommandPending() then
+        return self:_pauseForOutboundBusy(item)
     end
     self.batch.state = "RUNNING"
     self:_updateItem(item, "PREPARING")
@@ -372,6 +412,7 @@ function BulkSendCoordinator:_prepareCurrent()
         itemId = item.itemId,
         requireSubject = true,
         recordRecent = false,
+        skipCommandPending = skipCommandPending == true,
     })
     if not transactionId then
         self.activeTransaction = nil
@@ -438,7 +479,7 @@ function BulkSendCoordinator:OnSendEvent(event, ...)
         self.batch.currentIndex = self.batch.currentIndex + 1
         if self.stopRequested then return self:_cancelRemainingAndFinish() end
         if not self.batch.recipients[self.batch.currentIndex] then return self:_finishFromResults() end
-        if self.autoContinue then return self:_prepareCurrent() end
+        if self.autoContinue then return self:_scheduleNextRecipient() end
         self.batch.state = "WAITING_USER_ACTION"
         self:_notify()
         return true
@@ -479,6 +520,7 @@ function BulkSendCoordinator:_release(outcome, err)
 end
 
 function BulkSendCoordinator:_finish(state, outcome, err)
+    self:_invalidateServerWait()
     self.batch.state = state
     self.batch.finishedAt = self.now()
     if self.history then self.history:Finalize(self.batch.id, state) end
@@ -507,6 +549,7 @@ end
 
 function BulkSendCoordinator:CancelPending(reason)
     if not self.batch or BATCH_TERMINAL[self.batch.state] then return false end
+    self:_invalidateServerWait()
     self.stopRequested = true
     local item = self.batch.recipients[self.batch.currentIndex]
     local dispatched = self.activeTransaction and self.activeTransaction:GetSnapshot().dispatched

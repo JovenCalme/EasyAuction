@@ -126,7 +126,8 @@ function SendTransaction:Validate(draft)
         reject("RECIPIENT_BLACKLISTED", "该收件人已在黑名单，请先解除后再发送")
     end
     if self.compat.IsMailOpen and not self.compat:IsMailOpen() then reject("MAIL_CLOSED", "邮箱尚未打开") end
-    if self.compat.IsCommandPending and self.compat:IsCommandPending() then
+    if not (self.policy and self.policy.skipCommandPending)
+        and self.compat.IsCommandPending and self.compat:IsCommandPending() then
         reject("OUTBOUND_BUSY", "邮件服务器仍在处理上一项操作")
     end
     if self.compat.IsCursorEmpty and not self.compat:IsCursorEmpty() then reject("CURSOR_BUSY", "鼠标指针上已有物品") end

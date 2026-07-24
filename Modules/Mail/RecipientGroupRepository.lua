@@ -131,7 +131,11 @@ function RecipientGroupRepository:AddMember(groupId, value)
     local member, err = self:_normalizeMember(value)
     if not member then return nil, err end
     for index = 1, #group.members do
-        if group.members[index].recipientKey == member.recipientKey then return true end
+        local existing = self:_normalizeMember(group.members[index])
+        if existing and existing.recipientKey == member.recipientKey then
+            group.members[index] = clone(existing)
+            return true
+        end
     end
     if #group.members >= self.maxMembers then
         return nil, newError("TOO_MANY_RECIPIENTS", "用户组成员不能超过 " .. self.maxMembers .. " 人")
@@ -147,7 +151,8 @@ function RecipientGroupRepository:RemoveMember(groupId, value)
     local member, err = self:_normalizeMember(value)
     if not member then return nil, err end
     for index = #group.members, 1, -1 do
-        if group.members[index].recipientKey == member.recipientKey then
+        local existing = self:_normalizeMember(group.members[index])
+        if existing and existing.recipientKey == member.recipientKey then
             table.remove(group.members, index)
             self:_notify("UPDATED", groupId)
             return true

@@ -138,7 +138,8 @@ function Detector._registerDialogs(_)
     _G.StaticPopupDialogs[PROMPT_KEY] = {
         text = "|cffffd100检测插件冲突|r\n\n"
             .. "已加载：|cffffffff%s|r\n\n"
-            .. "EasyAuction已内置邮箱助手，解决卡拍卖",
+            .. "EasyAuction已内置邮箱助手，解决卡拍卖\n"
+            .. "请选择保留还是禁用外部邮箱插件？",
         button1 = "忽略提示",
         button2 = "禁用邮箱助手",
         button3 = "禁用外部插件",

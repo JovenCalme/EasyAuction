@@ -19,7 +19,8 @@ local function playerContext()
         faction = _G.UnitFactionGroup("player")
     end
     return {
-        currentRealm = _G.GetRealmName and _G.GetRealmName() or "",
+        currentRealm = Mail.GetCurrentRecipientRealm and Mail.GetCurrentRecipientRealm(_G)
+            or (_G.GetRealmName and _G.GetRealmName() or ""),
         currentFaction = faction,
     }
 end
@@ -58,6 +59,7 @@ function ComposeRuntime.New(deps)
         categoryRows = {},
         hooksInstalled = false,
         bagHookInstalled = false,
+        bagTooltipHookInstalled = false,
         nativeCanSendGuardHookInstalled = false,
         nativeEnableSendGuardHookInstalled = false,
     }, ComposeRuntime)
@@ -73,7 +75,8 @@ end
 
 function ComposeRuntime:_config()
     return self.deps.config or (Mail.Config and Mail.Config:GetMailConfig().compose) or {
-        autoFillRecipient = true, autoSend = false, enabledBags = {}, recipientByCategory = {},
+        autoFillRecipient = true, enableAltClick = false, autoSend = false,
+        enabledBags = {}, recipientByCategory = {},
     }
 end
 
@@ -206,6 +209,27 @@ local function enrichRecipients(recipients, metadataByKey)
     return result
 end
 
+function ComposeRuntime:_selectDirectoryRecipient(recipient, fallbackSendName)
+    local currentRealm = Mail.GetCurrentRecipientRealm and Mail.GetCurrentRecipientRealm(_G) or ""
+    if self.recipients and type(self.recipients.SetPlayerContext) == "function"
+        and type(_G.UnitName) == "function" and currentRealm ~= "" then
+        self.recipients:SetPlayerContext({
+            name = _G.UnitName("player"),
+            realm = currentRealm,
+            faction = _G.UnitFactionGroup and _G.UnitFactionGroup("player") or nil,
+        })
+    end
+    local normalized = self.recipients and self.recipients:Normalize(recipient, recipient and recipient.source)
+    local sendName = normalized and normalized.sendName or fallbackSendName
+        or recipient and (recipient.sendName or recipient.name) or ""
+    local box = self.deps.recipientBox or _G.SendMailNameEditBox
+    if box then box:SetText(sendName) end
+    local subject = _G.SendMailSubjectEditBox
+    if subject and subject.SetFocus then subject:SetFocus() end
+    if type(_G.CloseDropDownMenus) == "function" then _G.CloseDropDownMenus() end
+    return sendName
+end
+
 function ComposeRuntime:_recipientMenuItems(recipients)
     local items, seen = {}, {}
     for index = 1, #(recipients or {}) do
@@ -221,11 +245,7 @@ function ComposeRuntime:_recipientMenuItems(recipients)
                 arg1 = sendName,
                 notCheckable = true,
                 func = function()
-                    local box = self.deps.recipientBox or _G.SendMailNameEditBox
-                    if box then box:SetText(sendName) end
-                    local subject = _G.SendMailSubjectEditBox
-                    if subject and subject.SetFocus then subject:SetFocus() end
-                    if type(_G.CloseDropDownMenus) == "function" then _G.CloseDropDownMenus() end
+                    self:_selectDirectoryRecipient(recipient, sendName)
                 end,
             }
         end
@@ -854,10 +874,132 @@ function ComposeRuntime:_toggleGroupManager(createFrame)
     manager:Show()
 end
 
-function ComposeRuntime:_startAttachment(operationId, err)
-    if not operationId then self:_setStatus((err and (err.message or err.code)) or "无法附加物品", true) return end
+function ComposeRuntime:_startAttachment(operationId, err, autoSend)
+    if not operationId then
+        self.lastAttachmentAutoSend = nil
+        self:_setStatus((err and (err.message or err.code)) or "无法附加物品", true)
+        return
+    end
     self.lastAttachmentOperation = operationId
+    self.lastAttachmentAutoSend = autoSend == true
     self:_setStatus("正在确认附件", false)
+end
+
+function ComposeRuntime:_bagShortcutVisible()
+    local sendFrame = self.deps.sendFrame or _G.SendMailFrame
+    if not self.enabled or not self.toolbar or not sendFrame then return false end
+    if self.toolbar.IsVisible and not self.toolbar:IsVisible() then return false end
+    if sendFrame.IsShown and not sendFrame:IsShown() then return false end
+    return true
+end
+
+function ComposeRuntime._bagSlot(_, button, itemLocation)
+    if itemLocation then
+        local bag = itemLocation.bagID or itemLocation.bagIndex
+        local slot = itemLocation.slotIndex or itemLocation.slot
+        if bag ~= nil and slot ~= nil then return bag, slot end
+    end
+    if not button then return nil, nil end
+    local bag
+    if type(button.GetBagID) == "function" then bag = button:GetBagID() end
+    local parent = type(button.GetParent) == "function" and button:GetParent() or nil
+    if bag == nil and parent and type(parent.GetID) == "function" then bag = parent:GetID() end
+    local slot = type(button.GetID) == "function" and button:GetID() or nil
+    return bag, slot
+end
+
+function ComposeRuntime:_bagItem(bag, slot)
+    if bag == nil or slot == nil then return nil end
+    local container = _G.C_Container
+    local getInfo = self.deps.GetContainerItemInfo
+        or (container and container.GetContainerItemInfo) or _G.GetContainerItemInfo
+    if type(getInfo) ~= "function" then return nil end
+    local first, count, locked, _, _, _, link, _, _, itemID = getInfo(bag, slot)
+    if type(first) == "table" then
+        local info = first
+        return {
+            bag = bag, slot = slot, itemID = tonumber(info.itemID),
+            itemLink = info.hyperlink or info.itemLink,
+            count = tonumber(info.stackCount or info.count) or 1,
+            locked = info.isLocked == true or info.locked == true,
+            bound = info.isBound == true or info.bound == true,
+            icon = info.iconFileID or info.icon,
+        }
+    end
+    if not itemID then
+        local getItemID = container and container.GetContainerItemID or _G.GetContainerItemID
+        if type(getItemID) == "function" then itemID = getItemID(bag, slot) end
+    end
+    return {
+        bag = bag, slot = slot, itemID = tonumber(itemID), itemLink = link,
+        count = tonumber(count) or 1, locked = locked == true, icon = first,
+    }
+end
+
+function ComposeRuntime:HandleModifiedBagClick(button, mouseButton, itemLocation)
+    if mouseButton ~= "LeftButton" or not self:_bagShortcutVisible() or not self.quickAttach then return false end
+    local altDown = _G.IsAltKeyDown and _G.IsAltKeyDown()
+    local controlDown = _G.IsControlKeyDown and _G.IsControlKeyDown()
+    local config = self:_config()
+    local useAlt = altDown and config.enableAltClick == true
+    if not useAlt and not controlDown then return false end
+    local bag, slot = self:_bagSlot(button, itemLocation)
+    local item = self:_bagItem(bag, slot)
+    if not item or not item.itemID or item.locked then return false end
+    local operationId, err
+    if useAlt then
+        operationId, err = self.quickAttach:AttachSlot(item)
+        local recipientBox = self.deps.recipientBox or _G.SendMailNameEditBox
+        local recipient = recipientBox and recipientBox.GetText and recipientBox:GetText() or ""
+        local autoSend = config.autoSend == true and recipient:gsub("%s", "") ~= ""
+        self:_startAttachment(operationId, err, autoSend)
+    else
+        operationId, err = self.quickAttach:AttachExact(item.itemID)
+        self:_startAttachment(operationId, err, false)
+    end
+    return operationId ~= nil
+end
+
+function ComposeRuntime:_addBagShortcutTooltip(tooltip)
+    if not self:_bagShortcutVisible() or not tooltip or type(tooltip.AddLine) ~= "function" then return end
+    local compat = self:_compat()
+    if compat and type(compat.IsCursorEmpty) == "function" and not compat:IsCursorEmpty() then return end
+    local config = self:_config()
+    if config.enableAltClick == true then
+        local recipientBox = self.deps.recipientBox or _G.SendMailNameEditBox
+        local recipient = recipientBox and recipientBox.GetText and recipientBox:GetText() or ""
+        if config.autoSend == true and recipient:gsub("%s", "") ~= "" then
+            tooltip:AddLine("|cffffd200Alt+左键|r：将此物品发送给 " .. recipient, 1, 1, 1)
+        else
+            tooltip:AddLine("|cffffd200Alt+左键|r：附加当前物品", 1, 1, 1)
+        end
+    end
+    tooltip:AddLine("|cffffd200Ctrl+左键|r：附加背包中的相同物品", 1, 1, 1)
+end
+
+function ComposeRuntime:_installBagShortcutHooks()
+    if not self.bagHookInstalled and type(_G.hooksecurefunc) == "function" then
+        if type(_G.ContainerFrameItemButton_OnModifiedClick) == "function" then
+            _G.hooksecurefunc("ContainerFrameItemButton_OnModifiedClick", function(button, mouseButton)
+                self:HandleModifiedBagClick(button, mouseButton)
+            end)
+            self.bagHookInstalled = true
+        elseif type(_G.HandleModifiedItemClick) == "function" then
+            _G.hooksecurefunc("HandleModifiedItemClick", function(_, itemLocation)
+                if not itemLocation then return end
+                local mouseButton = _G.GetMouseButtonClicked and _G.GetMouseButtonClicked() or "LeftButton"
+                self:HandleModifiedBagClick(nil, mouseButton, itemLocation)
+            end)
+            self.bagHookInstalled = true
+        end
+    end
+    local tooltip = self.deps.gameTooltip or _G.GameTooltip
+    if not self.bagTooltipHookInstalled and tooltip and type(tooltip.HookScript) == "function" then
+        tooltip:HookScript("OnTooltipSetItem", function(currentTooltip)
+            self:_addBagShortcutTooltip(currentTooltip)
+        end)
+        self.bagTooltipHookInstalled = true
+    end
 end
 
 function ComposeRuntime:_ensureUI()
@@ -993,30 +1135,7 @@ function ComposeRuntime:_installHooks(recipientBox)
         end)
         self.nativeEnableSendGuardHookInstalled = true
     end
-    if not self.bagHookInstalled and _G.hooksecurefunc and _G.ContainerFrameItemButton_OnModifiedClick then
-        _G.hooksecurefunc("ContainerFrameItemButton_OnModifiedClick", function(button)
-            local sendFrame = self.deps.sendFrame or _G.SendMailFrame
-            if not self.enabled or not self.toolbar or not self.toolbar:IsVisible()
-                or not sendFrame or not sendFrame:IsShown() then return end
-            if not (_G.IsAltKeyDown and _G.IsAltKeyDown())
-                and not (_G.IsControlKeyDown and _G.IsControlKeyDown()) then return end
-            local bag = button:GetParent():GetID()
-            local slot = button:GetID()
-            local container = _G.C_Container
-            local info = container and container.GetContainerItemInfo and container.GetContainerItemInfo(bag, slot)
-            if not info or info.isLocked then return end
-            local item = {
-                bag = bag, slot = slot, itemID = info.itemID,
-                itemLink = info.hyperlink, count = info.stackCount, locked = info.isLocked,
-            }
-            if _G.IsAltKeyDown and _G.IsAltKeyDown() then
-                self:_startAttachment(self.quickAttach:AttachSlot(item))
-            elseif _G.IsControlKeyDown and _G.IsControlKeyDown() then
-                self:_startAttachment(self.quickAttach:AttachExact(item.itemID))
-            end
-        end)
-        self.bagHookInstalled = true
-    end
+    self:_installBagShortcutHooks()
 end
 
 function ComposeRuntime:_onMoneyChanged()
@@ -1087,11 +1206,14 @@ function ComposeRuntime:OnWoWEvent(event)
             local result = self.attachments:GetResult(self.lastAttachmentOperation)
             if result and result.state == "SUCCEEDED" then
                 self:_setStatus("附件已就绪", false)
+                local autoSend = self.lastAttachmentAutoSend == true
                 self.lastAttachmentOperation = nil
-                if self:_config().autoSend == true then self:SendCurrentDraft() end
+                self.lastAttachmentAutoSend = nil
+                if autoSend then self:SendCurrentDraft() end
             elseif result and (result.state == "FAILED" or result.state == "INDETERMINATE") then
                 self:_setStatus(result.error and result.error.message or "附件操作失败", true)
                 self.lastAttachmentOperation = nil
+                self.lastAttachmentAutoSend = nil
             end
         end
     end
@@ -1099,8 +1221,9 @@ end
 
 function ComposeRuntime:_rememberCurrentAlt()
     if not self.recipients or not _G.UnitName then return false end
-    local name, realm = _G.UnitName("player")
-    realm = realm and realm ~= "" and realm or (_G.GetRealmName and _G.GetRealmName())
+    local name = _G.UnitName("player")
+    local realm = Mail.GetCurrentRecipientRealm and Mail.GetCurrentRecipientRealm(_G)
+        or (_G.GetRealmName and _G.GetRealmName())
     local faction = _G.UnitFactionGroup and _G.UnitFactionGroup("player") or nil
     local _, classFile
     if _G.UnitClass then _, classFile = _G.UnitClass("player") end
@@ -1159,6 +1282,7 @@ function ComposeRuntime:OnSessionStop()
     if type(_G.CloseDropDownMenus) == "function" then _G.CloseDropDownMenus() end
     if self.groupManager then self.groupManager:Hide() end
     if self.attachments then self.attachments:OnSessionClosed() end
+    self.lastAttachmentAutoSend = nil
     if self.transaction then
         local state = self.transaction:GetState()
         local terminal = state == "SUCCEEDED" or state == "FAILED" or state == "UNKNOWN" or state == "CANCELLED"

@@ -1,4 +1,4 @@
-local ADDON_VERSION = "3.3.0"
+local ADDON_VERSION = "3.3.2"
 local EAStyle = _G.EasyAuctionStyle
 
 local function EA_ChangelogSkinFrame(frame, role)
@@ -70,6 +70,17 @@ local function EA_ChangelogLine(parent, alpha)
 end
 
 local UPDATE_NOTES = {
+    {
+        version = "3.3.2",
+        date = "2026-07-24",
+        note = [[
+- 修复闪收选择“全部”时遗漏邮件金币的问题，现在会同时显示物品和金币。
+- 修复同服收件人自动附加服务器后缀、导致发件前需要额外确认的问题；跨服收件人仍保留服务器名。
+- 修复闪寄批量金币邮件第一封成功后，第二封可能提示 OUTBOUND_BUSY 并暂停的问题。
+- 发件箱新增 Alt+左键自动填入并一键发送所点击的物品，可在设置中开启，默认关闭。
+- 发件箱新增 Ctrl+左键自动将点击的相同 itemID 的所有可邮寄物品填入到当前邮件。
+]],
+    },
     {
         version = "3.3.0",
         date = "2026-07-23",

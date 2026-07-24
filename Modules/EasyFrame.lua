@@ -1365,83 +1365,82 @@ function CreateEasyAuctionConfigFrame(parent)
     EA_SkinCloseButton(closeBtn)
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
 
-    local categoryFrame = CreateFrame("Frame", nil, frame)
-    categoryFrame:SetSize(90, height - 40)
-    categoryFrame:SetPoint("TOPLEFT", 12, -42)
-    local categories = {
-        { key = "addon", text = "插件设置" },
-        { key = "auction", text = "拍卖设置" },
-    }
-    local catButtons = {}
-    local curCat = "addon"
+    local tabState = { pages = {}, buttons = {}, active = "tips" }
+    for i, info in ipairs({
+        { key = "tips", text = "鼠标提示设置" },
+        { key = "auction", text = "拍卖功能设置" },
+        { key = "mail", text = "邮箱功能设置" },
+    }) do
+        local button = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        button:SetSize(128, 24)
+        button:SetPoint("TOPLEFT", frame, "TOPLEFT", 14 + (i - 1) * 134, -42)
+        button.configPageKey = info.key
+        EA_SkinTextButton(button, info.text, 128, 24)
+        tabState.buttons[info.key] = button
 
-    local function ShowCat(cat)
-        for k, btn in pairs(catButtons) do
-            if btn.key == cat then
-                btn.bg:SetColorTexture(0.1, 0.7, 1, 0.15)
-            else
-                btn.bg:SetColorTexture(0, 0, 0, 0)
-            end
+        local page = CreateFrame("Frame", nil, frame)
+        page:SetPoint("TOPLEFT", frame, "TOPLEFT", 14, -76)
+        page:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 122)
+        page:Hide()
+        tabState.pages[info.key] = page
+    end
+
+    local function ShowConfigTab(key)
+        if not tabState.pages[key] then key = "tips" end
+        tabState.active = key
+        for pageKey, page in pairs(tabState.pages) do
+            page:SetShown(pageKey == key)
+            EA_SetTextButtonActive(tabState.buttons[pageKey], pageKey == key)
         end
-        for _, page in pairs(frame.pages) do page:Hide() end
-        frame.pages[cat]:Show()
-        curCat = cat
     end
-    frame.EA_ShowConfigCategory = ShowCat
-
-    for i, info in ipairs(categories) do
-        local btn = CreateFrame("Button", nil, categoryFrame)
-        btn:SetSize(categoryFrame:GetWidth() - 2, 24)
-        btn:SetPoint("TOPLEFT", 0, -((i - 1) * 28))
-        btn.key = info.key
-        EA_SkinTextButton(btn, info.text, categoryFrame:GetWidth() - 2, 24)
-        btn.bg = btn:CreateTexture(nil, "BACKGROUND")
-        btn.bg:SetAllPoints()
-        btn.text = btn:GetFontString()
-        btn:SetScript("OnClick", function() ShowCat(info.key) end)
-        catButtons[info.key] = btn
+    for _, button in pairs(tabState.buttons) do
+        button:SetScript("OnClick", function(self) ShowConfigTab(self.configPageKey) end)
     end
+    frame.pages = tabState.pages
+    frame.mailSettingsHost = tabState.pages.mail
+    frame.EA_ShowConfigCategory = ShowConfigTab
+    frame.EA_ShowAddonConfigTab = ShowConfigTab
 
-    frame.pages = {}
+    local interfaceFooter = CreateFrame("Frame", nil, frame, "BackdropTemplate")
+    interfaceFooter:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 14, 46)
+    interfaceFooter:SetSize(402, 64)
+    EA_SkinPanel(interfaceFooter, "panel")
+    EA_ApplyOutline(interfaceFooter, 0.58)
 
-    local pageAuction = CreateFrame("Frame", nil, frame)
-    pageAuction:SetSize(width - 122, height - 54)
-    pageAuction:SetPoint("TOPLEFT", categoryFrame, "TOPRIGHT", 10, 0)
-    frame.pages["auction"] = pageAuction
+    local pageAuction = tabState.pages.auction
+    local pageTips = tabState.pages.tips
 
     local labelWidth = 112
     local inputStartX = 118
-    local rowHeight = 28
-    local startY = -18
     local auctionContent
     local cfgRows = {
         [1] = -34,
         [2] = -62,
-        [3] = -186,
-        [4] = -214,
-        [5] = -242,
-        [6] = -96,
-        [8] = -312,
-        [9] = -340,
-        [10] = -368,
+        [6] = -90,
+        [3] = -164,
+        [4] = -192,
+        [5] = -220,
+        [8] = -294,
+        [9] = -322,
+        [10] = -350,
     }
 
     local function GetCfgRowY(row)
-        return cfgRows[row] or (startY - (row - 1.5) * rowHeight)
+        return cfgRows[row] or -34
     end
 
-    local function AddAuctionPanel(y, h)
+    local function AddAuctionPanel(x, y, w, h)
         local panel = CreateFrame("Frame", nil, pageAuction, "BackdropTemplate")
-        panel:SetPoint("TOPLEFT", pageAuction, "TOPLEFT", 0, y)
-        panel:SetSize(304, h)
+        panel:SetPoint("TOPLEFT", pageAuction, "TOPLEFT", x, y)
+        panel:SetSize(w, h)
         EA_SkinPanel(panel, "panel")
         EA_ApplyOutline(panel, 0.58)
         return panel
     end
 
-    local function AddAuctionSection(y, text)
+    local function AddAuctionSection(x, y, w, text)
         local fs = pageAuction:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        fs:SetPoint("TOPLEFT", pageAuction, "TOPLEFT", 8, y)
+        fs:SetPoint("TOPLEFT", pageAuction, "TOPLEFT", x + 8, y)
         fs:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 12, "")
         fs:SetText(text)
         EA_SkinText(fs, "accent")
@@ -1449,7 +1448,7 @@ function CreateEasyAuctionConfigFrame(parent)
         line:SetTexture("Interface\\Buttons\\WHITE8X8")
         line:SetHeight(1)
         line:SetPoint("LEFT", fs, "RIGHT", 8, 0)
-        line:SetPoint("RIGHT", pageAuction, "RIGHT", -8, 0)
+        line:SetPoint("RIGHT", pageAuction, "TOPLEFT", x + w - 8, y)
         EA_SetLineColor(line, 0.45)
         return fs
     end
@@ -1472,12 +1471,12 @@ function CreateEasyAuctionConfigFrame(parent)
         return box
     end
 
-    AddAuctionPanel(-18, 132)
-    AddAuctionSection(-4, "上架价格")
-    AddAuctionPanel(-170, 96)
-    AddAuctionSection(-156, "默认上架")
-    AddAuctionPanel(-296, 102)
-    AddAuctionSection(-282, "数据与扫描")
+    AddAuctionPanel(0, -18, 402, 104)
+    AddAuctionSection(0, -4, 402, "上架价格")
+    AddAuctionPanel(0, -148, 195, 104)
+    AddAuctionSection(0, -134, 195, "默认上架")
+    AddAuctionPanel(0, -278, 195, 104)
+    AddAuctionSection(0, -264, 195, "数据与扫描")
     auctionContent = CreateFrame("Frame", nil, pageAuction)
     auctionContent:SetAllPoints(pageAuction)
     auctionContent:SetFrameLevel(pageAuction:GetFrameLevel() + 8)
@@ -1721,45 +1720,39 @@ function CreateEasyAuctionConfigFrame(parent)
     boxScanPerFrame:SetScript("OnEnter", labelScanPerFrame:GetScript("OnEnter"))
     boxScanPerFrame:SetScript("OnLeave", GameTooltip_Hide)
 
-    local pageAddon = CreateFrame("Frame", nil, frame)
-    pageAddon:SetSize(width - 122, height - 54)
-    pageAddon:SetPoint("TOPLEFT", categoryFrame, "TOPRIGHT", 10, 0)
-    frame.pages["addon"] = pageAddon
-
     local optionRowHeight = 20
-    local optionRowWidth = 292
 
-    local function AddOptionPanel(y, h)
-        local panel = CreateFrame("Frame", nil, pageAddon, "BackdropTemplate")
-        panel:SetPoint("TOPLEFT", pageAddon, "TOPLEFT", 0, y)
-        panel:SetSize(304, h)
+    local function AddOptionPanel(parentPage, x, y, w, h)
+        local panel = CreateFrame("Frame", nil, parentPage, "BackdropTemplate")
+        panel:SetPoint("TOPLEFT", parentPage, "TOPLEFT", x, y)
+        panel:SetSize(w, h)
         EA_SkinPanel(panel, "panel")
         EA_ApplyOutline(panel, 0.58)
         return panel
     end
 
-    local function AddOptionSection(y, text)
-        local fs = pageAddon:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        fs:SetPoint("TOPLEFT", pageAddon, "TOPLEFT", 8, y)
+    local function AddOptionSection(parentPage, x, y, w, text)
+        local fs = parentPage:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        fs:SetPoint("TOPLEFT", parentPage, "TOPLEFT", x + 8, y)
         fs:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 12, "")
         fs:SetText(text)
         EA_SkinText(fs, "accent")
-        local line = pageAddon:CreateTexture(nil, "OVERLAY")
+        local line = parentPage:CreateTexture(nil, "OVERLAY")
         line:SetTexture("Interface\\Buttons\\WHITE8X8")
         line:SetHeight(1)
         line:SetPoint("LEFT", fs, "RIGHT", 8, 0)
-        line:SetPoint("RIGHT", pageAddon, "RIGHT", -8, 0)
+        line:SetPoint("RIGHT", parentPage, "TOPLEFT", x + w - 8, y)
         EA_SetLineColor(line, 0.45)
         return fs
     end
 
-    local function AddOptionCheck(y, label, key, tooltip)
-        local row = CreateFrame("Frame", nil, pageAddon)
-        row:SetSize(optionRowWidth, optionRowHeight)
-        row:SetPoint("TOPLEFT", pageAddon, "TOPLEFT", 8, y)
+    local function AddOptionCheck(parentPage, x, y, rowWidth, textWidth, label, key, tooltip)
+        local row = CreateFrame("Frame", nil, parentPage)
+        row:SetSize(rowWidth, optionRowHeight)
+        row:SetPoint("TOPLEFT", parentPage, "TOPLEFT", x, y)
         row.label = row:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         row.label:SetPoint("LEFT", row, "LEFT", 0, 0)
-        row.label:SetWidth(212)
+        row.label:SetWidth(textWidth)
         row.label:SetJustifyH("LEFT")
         row.label:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 12, "")
         row.label:SetText(label)
@@ -1799,39 +1792,50 @@ function CreateEasyAuctionConfigFrame(parent)
         return cb
     end
 
-    AddOptionPanel(-18, 132)
-    AddOptionSection(-4, "鼠标提示")
-    AddOptionCheck(-26, "EA 鼠标提示", "ShowPrice", "EasyAuction鼠标提示总开关")
-    AddOptionCheck(-47, "隐藏原生卖店价", "hideSellPrice", "是否显示系统卖价信息")
-    AddOptionCheck(-68, "显示拍卖价格", "enablePrice", "是否显示卖店价及拍卖价格信息")
-    AddOptionCheck(-89, "显示卖店价", "enableVendor", "是否显示卖店价价格")
-    AddOptionCheck(-110, "显示历史最低", "ShowMinPrice", "是否显示物品历史最低价格")
-    AddOptionCheck(-131, "单价优先", "showUnitPrice", "关闭后优先显示总价，按 Shift 显示单价；开启后优先显示单价。")
+    AddOptionPanel(pageTips, 0, -18, 402, 132)
+    AddOptionSection(pageTips, 0, -4, 402, "价格提示")
+    AddOptionCheck(pageTips, 8, -26, 386, 306, "价格提示总开关", "ShowPrice",
+        "EasyAuction鼠标提示总开关")
+    AddOptionCheck(pageTips, 8, -47, 386, 306, "隐藏原生卖店价", "hideSellPrice",
+        "是否显示系统卖价信息")
+    AddOptionCheck(pageTips, 8, -68, 386, 306, "显示拍卖价格", "enablePrice",
+        "是否显示卖店价及拍卖价格信息")
+    AddOptionCheck(pageTips, 8, -89, 386, 306, "显示卖店价", "enableVendor", "是否显示卖店价价格")
+    AddOptionCheck(pageTips, 8, -110, 386, 306, "显示历史最低", "ShowMinPrice",
+        "是否显示物品历史最低价格")
+    AddOptionCheck(pageTips, 8, -131, 386, 306, "单价优先", "showUnitPrice",
+        "关闭后优先显示总价，按 Shift 显示单价；开启后优先显示单价。")
 
-    AddOptionPanel(-166, 90)
-    AddOptionSection(-152, "专业收益")
-    AddOptionCheck(-174, "分解收益", "enableDisenchant", "是否显示物品分解价值")
-    AddOptionCheck(-195, "分解概率", "enableDisenchantProb", "是否显示物品分解概率")
-    AddOptionCheck(-216, "选矿收益", "enableProspect", "是否显示物品选矿价值")
-    AddOptionCheck(-237, "研磨收益", "enableMill", "是否显示物品研磨价值")
+    AddOptionPanel(pageTips, 0, -166, 402, 90)
+    AddOptionSection(pageTips, 0, -152, 402, "专业收益提示")
+    AddOptionCheck(pageTips, 8, -174, 386, 306, "分解收益", "enableDisenchant", "是否显示物品分解价值")
+    AddOptionCheck(pageTips, 8, -195, 386, 306, "分解概率", "enableDisenchantProb", "是否显示物品分解概率")
+    AddOptionCheck(pageTips, 8, -216, 386, 306, "选矿收益", "enableProspect", "是否显示物品选矿价值")
+    AddOptionCheck(pageTips, 8, -237, 386, 306, "研磨收益", "enableMill", "是否显示物品研磨价值")
 
-    AddOptionPanel(-284, 154)
-    AddOptionSection(-270, "拍卖行行为")
-    AddOptionCheck(-292, "启用自动压价", "enableUndercut", "开启后，总价/起拍价会自动减去配置的压价金额")
-    AddOptionCheck(-313, "连续上架同价", "autoFillLastAuction", "连续上架相同物品时自动填充上一次拍卖价格。")
-    AddOptionCheck(-334, "在售列表左键复制", "enableAuctionListCopy", "开启后，可在在售列表中左键点击物品名称进行复制")
-    AddOptionCheck(-355, "浏览买按钮", "enableBrowseBuyButton", "关闭后，拍卖行浏览列表不显示 EasyAuction 的“买”按钮")
-    AddOptionCheck(-376, "浏览竞按钮", "enableBrowseBidButton", "关闭后，拍卖行浏览列表不显示 EasyAuction 的“竞”按钮")
-    AddOptionCheck(-397, "搜索框防污染", "enableSearchBoxProtection", "关闭后，不再启用拍卖行搜索框防污染/防限流拦截提示")
+    AddOptionPanel(pageAuction, 203, -148, 199, 174)
+    AddOptionSection(pageAuction, 203, -134, 199, "拍卖行设置")
+    AddOptionCheck(pageAuction, 209, -156, 187, 123, "启用自动压价", "enableUndercut",
+        "开启后，总价/起拍价会自动减去配置的压价金额")
+    AddOptionCheck(pageAuction, 209, -179, 187, 123, "连续上架同价", "autoFillLastAuction",
+        "连续上架相同物品时自动填充上一次拍卖价格。")
+    AddOptionCheck(pageAuction, 209, -202, 187, 123, "在售列表左键复制", "enableAuctionListCopy",
+        "开启后，可在在售列表中左键点击物品名称进行复制")
+    AddOptionCheck(pageAuction, 209, -225, 187, 123, "浏览买按钮", "enableBrowseBuyButton",
+        "关闭后，拍卖行浏览列表不显示 EasyAuction 的“买”按钮")
+    AddOptionCheck(pageAuction, 209, -248, 187, 123, "浏览竞按钮", "enableBrowseBidButton",
+        "关闭后，拍卖行浏览列表不显示 EasyAuction 的“竞”按钮")
+    AddOptionCheck(pageAuction, 209, -271, 187, 123, "搜索框防污染", "enableSearchBoxProtection",
+        "关闭后，不再启用拍卖行搜索框防污染/防限流拦截提示")
 
-    local buyRiskRow = CreateFrame("Frame", nil, pageAddon)
-    buyRiskRow:SetSize(optionRowWidth, optionRowHeight)
-    buyRiskRow:SetPoint("TOPLEFT", pageAddon, "TOPLEFT", 8, -418)
+    local buyRiskRow = CreateFrame("Frame", nil, pageAuction)
+    buyRiskRow:SetSize(187, optionRowHeight)
+    buyRiskRow:SetPoint("TOPLEFT", pageAuction, "TOPLEFT", 209, -294)
     local buyRiskLabel = buyRiskRow:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     buyRiskLabel:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 12, "")
     buyRiskLabel:SetPoint("LEFT", buyRiskRow, "LEFT", 0, 0)
     buyRiskLabel:SetJustifyH("LEFT")
-    buyRiskLabel:SetWidth(168)
+    buyRiskLabel:SetWidth(120)
     buyRiskLabel:SetText("单次购买风控")
     EA_SkinText(buyRiskLabel, "text")
 
@@ -1863,12 +1867,9 @@ function CreateEasyAuctionConfigFrame(parent)
         self:SetNumber(v)
     end)
 
-    AddOptionPanel(-454, 72)
-    AddOptionSection(-440, "风险与界面")
-
-    local scalePanel = CreateFrame("Frame", nil, pageAddon)
-    scalePanel:SetSize(optionRowWidth, 44)
-    scalePanel:SetPoint("TOPLEFT", pageAddon, "TOPLEFT", 8, -464)
+    local scalePanel = CreateFrame("Frame", nil, interfaceFooter)
+    scalePanel:SetSize(276, 44)
+    scalePanel:SetPoint("LEFT", interfaceFooter, "LEFT", 8, 0)
 
     local scaleLabel = scalePanel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     scaleLabel:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 12, "")
@@ -1933,12 +1934,12 @@ function CreateEasyAuctionConfigFrame(parent)
         value = tonumber(value) or EA_DEFAULT_UI_SCALE
         if value < 0.5 then value = 0.5 elseif value > 1.2 then value = 1.2 end
         value = math.floor(value * 100 + 0.5) / 100
-        EasyAuctionDB.uiScale = value
         scaleValue:SetText(string.format("%d%%", math.floor(value * 100 + 0.5)))
-        if math.abs((scaleSlider:GetValue() or 1) - value) > 0.001 then
-            scaleSlider:SetValue(value)
-        end
         if applyNow then
+            EasyAuctionDB.uiScale = value
+            if math.abs((scaleSlider:GetValue() or 1) - value) > 0.001 then
+                scaleSlider:SetValue(value)
+            end
             ApplyEasyAuctionUIScale()
         end
     end
@@ -1956,10 +1957,10 @@ function CreateEasyAuctionConfigFrame(parent)
     scaleSlider:SetValue(EasyAuctionDB.uiScale or EA_DEFAULT_UI_SCALE)
     ApplyScaleValue(EasyAuctionDB.uiScale or EA_DEFAULT_UI_SCALE, true)
     scaleSlider:SetScript("OnValueChanged", function(_, value)
-        ApplyScaleValue(value, true)
+        ApplyScaleValue(value, false)
     end)
     scaleSlider:SetScript("OnMouseUp", function()
-        ApplyEasyAuctionUIScale()
+        ApplyScaleValue(scaleSlider:GetValue(), true)
     end)
     scaleSlider:SetScript("OnEnter", function(self)
         GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
@@ -1975,7 +1976,6 @@ function CreateEasyAuctionConfigFrame(parent)
             end
         end)
     end
-
     local resetBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     resetBtn:SetSize(80, 24)
     resetBtn:SetText("重置插件")
@@ -2046,39 +2046,23 @@ function CreateEasyAuctionConfigFrame(parent)
 
     local changelogBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     changelogBtn:SetSize(80, 24)
-    changelogBtn:SetPoint("BOTTOM", resetBtn, "TOP", 0, 10)
+    changelogBtn:SetPoint("LEFT", resetBtn, "RIGHT", 8, 0)
     changelogBtn:SetText("更新日志")
     EA_SkinButton(changelogBtn)
     changelogBtn:SetScript("OnClick", function()
         ShowUpdateNotesPopup()
     end)
 
-    local relatedBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    relatedBtn:SetSize(80, 24)
-    relatedBtn:SetPoint("BOTTOM", changelogBtn, "TOP", 0, 10)
-    relatedBtn:SetText("周边插件")
-    EA_SkinButton(relatedBtn)
-    relatedBtn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("支持调用EasyAuction数据库的插件", 1, 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    relatedBtn:SetScript("OnLeave", function()
-        GameTooltip:Hide()
-    end)
-    relatedBtn:SetScript("OnClick", function()
-        ShowRelatedAddonsPopup()
-    end)
-    local themeBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    themeBtn:SetSize(80, 24)
-    themeBtn:SetPoint("BOTTOMLEFT", relatedBtn, "TOPLEFT", 0, 10)
+    local themeBtn = CreateFrame("Button", nil, interfaceFooter, "UIPanelButtonTemplate")
+    themeBtn:SetSize(96, 24)
+    themeBtn:SetPoint("RIGHT", interfaceFooter, "RIGHT", -8, 0)
     EA_SkinButton(themeBtn)
     EA_SetThemeDropdownButton(themeBtn, false)
     frame:SetScript("OnShow", function()
         EA_RaiseUtilityFrame(frame, frameParent)
-        ShowCat("addon")
+        ShowConfigTab(tabState.active or "tips")
     end)
-    ShowCat("addon")
+    ShowConfigTab("tips")
 end
 
 local function PickupAndPutToAuction(bag, slot)

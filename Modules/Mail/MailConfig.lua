@@ -17,6 +17,7 @@ local DEFAULT_MAIL = {
     },
     compose = {
         autoFillRecipient = true,
+        enableAltClick = false,
         autoSend = false,
         bulkMatchMode = "EXACT_ID",
         enabledBags = { [0] = true, [1] = true, [2] = true, [3] = true, [4] = true },
@@ -90,6 +91,8 @@ local function normalizeConfig(mail)
         mail.bulk.historyMaxRecipientEntries, 5000, 1, 20000)
     mail.bulk.historyMaxAgeDays = clampInteger(mail.bulk.historyMaxAgeDays, 90, 1, 365)
     mail.recipients.recentLimit = clampInteger(mail.recipients.recentLimit, 20, 1, 100)
+    if type(mail.compose.enableAltClick) ~= "boolean" then mail.compose.enableAltClick = false end
+    if type(mail.compose.autoSend) ~= "boolean" then mail.compose.autoSend = false end
     if mail.compose.bulkMatchMode ~= "EXACT_ID" then mail.compose.bulkMatchMode = "EXACT_ID" end
     if mail.bulk.lastSourceKind == "party" then mail.bulk.lastSourceKind = "raid" end
     local validSource = { raid = true, guild = true, custom = true }
@@ -144,9 +147,10 @@ end
 local function altKey(value)
     local record = decodeLegacyAlt(value)
     if not record then return nil end
+    local realm = type(Mail.NormalizeRealmKey) == "function"
+        and Mail.NormalizeRealmKey(record.realm) or string.lower((record.realm or ""):gsub("%s+", ""))
     return string.lower((record.name or ""):gsub("%s+", "")) .. "|"
-        .. string.lower((record.realm or ""):gsub("%s+", "")) .. "|"
-        .. string.lower(record.faction or "")
+        .. realm .. "|" .. string.lower(record.faction or "")
 end
 
 local function mergePostalAlts(target, source)
@@ -311,6 +315,7 @@ function Config:SetEnabled(enabled)
 end
 
 local FEATURE_SECTIONS = { inbox = true, bulk = true }
+local COMPOSE_OPTIONS = { enableAltClick = true, autoSend = true }
 
 function Config:GetFeatureEnabled(feature)
     if not FEATURE_SECTIONS[feature] then return false end
@@ -325,6 +330,22 @@ function Config:SetFeatureEnabled(feature, enabled)
         return nil, Mail:NewError("INVALID_ENABLED_VALUE", "邮箱子功能开关必须是 boolean。")
     end
     self:GetMailConfig()[feature].enabled = enabled
+    return true
+end
+
+function Config:GetComposeOption(option)
+    if not COMPOSE_OPTIONS[option] then return false end
+    return self:GetMailConfig().compose[option] == true
+end
+
+function Config:SetComposeOption(option, enabled)
+    if not COMPOSE_OPTIONS[option] then
+        return nil, Mail:NewError("INVALID_COMPOSE_OPTION", "发件快捷选项无效。", { option = option })
+    end
+    if type(enabled) ~= "boolean" then
+        return nil, Mail:NewError("INVALID_ENABLED_VALUE", "发件快捷开关必须是 boolean。")
+    end
+    self:GetMailConfig().compose[option] = enabled
     return true
 end
 

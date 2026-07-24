@@ -39,7 +39,10 @@ end
 
 function Controller:_desiredEnabled()
     if type(self.deps.desiredEnabled) == "function" then return self.deps.desiredEnabled() == true end
-    return Mail.Config and Mail.Config:GetEnabled() or true
+    -- 注意：不能写成 Mail.Config and Mail.Config:GetEnabled() or true，
+    -- GetEnabled() 为 false 时会被 or true 吞掉，导致已禁用的配置被当成启用。
+    if not Mail.Config then return true end
+    return Mail.Config:GetEnabled() == true
 end
 
 function Controller:_rolloutEnabled()

@@ -67,7 +67,8 @@ function BulkMailController:_ensureServices()
         self.history:RecoverInterrupted()
     end
     if not self.groupProvider then
-        local realm = _G.GetRealmName and _G.GetRealmName() or ""
+        local realm = Mail.GetCurrentRecipientRealm and Mail.GetCurrentRecipientRealm(_G)
+            or (_G.GetRealmName and _G.GetRealmName() or "")
         self.groupProvider = Mail.BulkRosterProviders.NewGroup({ currentRealm = realm, api = _G })
         self.guildProvider = Mail.BulkRosterProviders.NewGuild({ currentRealm = realm, api = _G })
         self.customProvider = Mail.BulkRosterProviders.NewCustom({

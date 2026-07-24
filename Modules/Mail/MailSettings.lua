@@ -39,6 +39,22 @@ function Settings:GetFeatureEnabled(feature)
     return config and config:GetFeatureEnabled(feature) or false
 end
 
+function Settings:GetComposeOption(option)
+    local config = self:_config()
+    return config and config:GetComposeOption(option) or false
+end
+
+function Settings:SetComposeOption(option, enabled)
+    if type(enabled) ~= "boolean" then
+        return nil, Mail:NewError("INVALID_ENABLED_VALUE", "发件快捷开关必须是 boolean。")
+    end
+    local config = self:_config()
+    local saved, err = config:SetComposeOption(option, enabled)
+    if not saved then return nil, err end
+    self:RefreshControls()
+    return true
+end
+
 function Settings:SetFeatureEnabled(feature, enabled, reason)
     if type(enabled) ~= "boolean" or not FEATURE_RUNTIME_IDS[feature] then
         return nil, Mail:NewError("INVALID_ENABLED_VALUE", "邮箱子功能开关无效。")
@@ -162,6 +178,12 @@ function Settings:RefreshControls()
     if controls.bulkToggle and controls.bulkToggle.SetChecked then
         controls.bulkToggle:SetChecked(self:GetFeatureEnabled("bulk"))
     end
+    if controls.enableAltClickToggle and controls.enableAltClickToggle.SetChecked then
+        controls.enableAltClickToggle:SetChecked(self:GetComposeOption("enableAltClick"))
+    end
+    if controls.autoSendToggle and controls.autoSendToggle.SetChecked then
+        controls.autoSendToggle:SetChecked(self:GetComposeOption("autoSend"))
+    end
     local state = self:GetRuntimeStatus()
     if controls.toggle and controls.toggle.SetEnabled then
         controls.toggle:SetEnabled(state ~= Mail.RuntimeState.ENABLING
@@ -176,6 +198,13 @@ function Settings:RefreshControls()
     end
     if controls.bulkToggle and controls.bulkToggle.SetEnabled then
         controls.bulkToggle:SetEnabled(featureControlsEnabled)
+    end
+    if controls.enableAltClickToggle and controls.enableAltClickToggle.SetEnabled then
+        controls.enableAltClickToggle:SetEnabled(featureControlsEnabled)
+    end
+    if controls.autoSendToggle and controls.autoSendToggle.SetEnabled then
+        controls.autoSendToggle:SetEnabled(featureControlsEnabled
+            and self:GetComposeOption("enableAltClick"))
     end
     local external = self:GetExternalStatus()
     local text = STATUS_TEXT[state] or state
@@ -193,18 +222,20 @@ function Settings:CreateControls(parent, options)
     end
     if self.controls then return self.controls.container end
     local container = _G.CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    container:SetSize(options.width or 300, options.height or (options.compact and 62 or 110))
+    container:SetSize(options.width or 300, options.height or (options.compact and 38 or 160))
     if options.point then container:SetPoint(unpack(options.point)) end
     local title = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    title:SetPoint("TOPLEFT", options.compact and 8 or 0, options.compact and -4 or 0)
-    title:SetText("邮箱功能")
-    local function createToggle(labelText, compactX, relative, onClick)
+    title:SetPoint("TOPLEFT", options.compact and 8 or 12, options.compact and -4 or -10)
+    title:SetText(options.compact and "邮箱" or "邮箱功能")
+    local style = _G.EasyAuctionStyle
+    if style and type(style.SkinText) == "function" then style:SkinText(title, "accent") end
+    local function createToggle(labelText, compactX, expandedY, onClick)
         local button = _G.CreateFrame("CheckButton", nil, container, "UICheckButtonTemplate")
+        button:SetSize(20, 20)
         if options.compact then
-            button:SetSize(20, 20)
             button:SetPoint("TOPLEFT", container, "TOPLEFT", compactX, -1)
         else
-            button:SetPoint("TOPLEFT", relative or title, "BOTTOMLEFT", 0, -8)
+            button:SetPoint("TOPLEFT", container, "TOPLEFT", 12, expandedY)
         end
         local label = button.Text
         if type(label) ~= "table" or type(label.SetPoint) ~= "function" then
@@ -213,40 +244,78 @@ function Settings:CreateControls(parent, options)
         if label.ClearAllPoints then label:ClearAllPoints() end
         label:SetPoint("LEFT", button, "RIGHT", 2, 0)
         label:SetText(labelText)
+        if style and type(style.SkinText) == "function" then style:SkinText(label, "text") end
         button:SetScript("OnClick", onClick)
         return button
     end
-    local toggle = createToggle(options.compact and "总开关" or "启用邮箱功能", 76, nil,
+    local toggle = createToggle(options.compact and "总" or "启用邮箱功能", 44, -32,
         function(button)
             local requested = button:GetChecked() == true
             local ok = self:RequestSetEnabled(requested, "SETTINGS")
             if not ok then button:SetChecked(self:GetEnabled()) end
         end)
-    local inboxToggle = createToggle("闪收", 160, toggle, function(button)
+    local inboxToggle = createToggle(options.compact and "闪收" or "启用闪收", 82, -60, function(button)
         local requested = button:GetChecked() == true
         local ok = self:SetFeatureEnabled("inbox", requested, "SETTINGS")
         if not ok then button:SetChecked(self:GetFeatureEnabled("inbox")) end
     end)
-    local bulkToggle = createToggle("闪寄", 228, inboxToggle, function(button)
+    local bulkToggle = createToggle(options.compact and "闪寄" or "启用闪寄", 132, -88, function(button)
         local requested = button:GetChecked() == true
         local ok = self:SetFeatureEnabled("bulk", requested, "SETTINGS")
         if not ok then button:SetChecked(self:GetFeatureEnabled("bulk")) end
     end)
+    local shortcutTitle
+    if not options.compact then
+        shortcutTitle = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        shortcutTitle:SetPoint("TOPLEFT", container, "TOPLEFT", 12, -118)
+        shortcutTitle:SetText("发件快捷")
+        if style and type(style.SkinText) == "function" then style:SkinText(shortcutTitle, "accent") end
+    end
+    local enableAltClickToggle = createToggle(options.compact and "Alt附件" or "Alt+左键快速附件",
+        182, -136, function(button)
+        local requested = button:GetChecked() == true
+        local ok = self:SetComposeOption("enableAltClick", requested)
+        if not ok then button:SetChecked(self:GetComposeOption("enableAltClick")) end
+    end)
+    local autoSendToggle = createToggle(options.compact and "自动" or "附件后自动发送",
+        238, -164, function(button)
+        local requested = button:GetChecked() == true
+        local ok = self:SetComposeOption("autoSend", requested)
+        if not ok then button:SetChecked(self:GetComposeOption("autoSend")) end
+    end)
+    local function setHelp(button, titleText, bodyText)
+        button:SetScript("OnEnter", function()
+            if not _G.GameTooltip then return end
+            _G.GameTooltip:SetOwner(button, "ANCHOR_RIGHT")
+            _G.GameTooltip:SetText(titleText)
+            _G.GameTooltip:AddLine(bodyText, 1, 1, 1, true)
+            _G.GameTooltip:Show()
+        end)
+        button:SetScript("OnLeave", function()
+            if _G.GameTooltip then _G.GameTooltip:Hide() end
+        end)
+    end
+    setHelp(enableAltClickToggle, "Alt 点击附件",
+        "开启后，Alt+左键点击背包物品可将其放入当前邮件。")
+    setHelp(autoSendToggle, "Alt 点击后自动发送",
+        "附件确认成功且收件人不为空时，自动发送当前邮件。")
     local status = container:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     if options.compact then
         status:SetPoint("TOPLEFT", container, "TOPLEFT", 8, -24)
     else
-        status:SetPoint("TOPLEFT", bulkToggle, "BOTTOMLEFT", 4, -4)
+        status:SetPoint("TOPLEFT", container, "TOPLEFT", 12, -196)
     end
     status:SetWidth((options.width or 300) - 16)
     status:SetJustifyH("LEFT")
-    status:SetWordWrap(false)
+    status:SetWordWrap(not options.compact)
     status:SetText("")
     self.controls = {
         container = container,
         toggle = toggle,
         inboxToggle = inboxToggle,
         bulkToggle = bulkToggle,
+        enableAltClickToggle = enableAltClickToggle,
+        autoSendToggle = autoSendToggle,
         status = status,
     }
     Mail:Subscribe("MAIL_MODULE_STATE_CHANGED", self, function() self:RefreshControls() end)
@@ -257,13 +326,14 @@ end
 
 function Settings:AttachToEasyAuctionConfig()
     local frame = _G.EasyAuctionConfigFrame
-    local page = frame and frame.pages and frame.pages.addon
+    local modernPage = frame and frame.mailSettingsHost
+    local page = modernPage or (frame and frame.pages and frame.pages.addon)
     if not page then return false end
     local container, err = self:CreateControls(page, {
-        width = 304,
-        height = 38,
-        compact = true,
-        point = { "TOPLEFT", page, "TOPLEFT", 0, -528 },
+        width = modernPage and 402 or 304,
+        height = modernPage and 220 or 38,
+        compact = not modernPage,
+        point = { "TOPLEFT", page, "TOPLEFT", 0, modernPage and -18 or -528 },
     })
     if not container then return nil, err end
     local style = _G.EasyAuctionStyle
