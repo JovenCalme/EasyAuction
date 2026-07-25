@@ -130,7 +130,7 @@ local function normalizeHeader(raw)
         canReply = raw.canReply == true,
         isGM = raw.isGM == true,
         canDelete = raw.canDelete == true,
-        canReturn = raw.wasReturned ~= true and raw.canReply == true,
+        canReturn = raw.canReturn == true,
         rawCapabilities = raw.capabilities,
     }
 end
@@ -352,7 +352,7 @@ function Repository:Snapshot()
         capabilities.canTakeMoney = capabilities.canTakeMoney == true or header.money > 0
         capabilities.canTakeItems = not capabilities.isCOD
             and (capabilities.canTakeItems == true or #attachments > 0)
-        capabilities.canReturn = not header.wasReturned and header.canReply
+        capabilities.canReturn = header.canReturn
         capabilities.canDelete = capabilities.canDelete == true or header.canDelete
 
         local invoice
