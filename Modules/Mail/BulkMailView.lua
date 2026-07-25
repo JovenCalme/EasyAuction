@@ -43,6 +43,25 @@ local STATUS_TEXTURE = {
     SKIPPED = "Interface/RaidFrame/ReadyCheck-Waiting",
 }
 
+local HISTORY_SOURCE_LABEL = {
+    raid = "团队",
+    party = "小队",
+    guild = "公会",
+    custom = "自定",
+}
+
+local function formatBatchTitle(record, timestamp)
+    local source = HISTORY_SOURCE_LABEL[record.sourceKind] or tostring(record.sourceKind or "")
+    local text = string.format("%s %s %d人 成%d败%d", timestamp, source,
+        record.selectedCount or #(record.recipients or {}), record.successCount or 0,
+        record.failedCount or 0)
+    local unknown = tonumber(record.unknownCount) or 0
+    local cancelled = tonumber(record.cancelledCount) or 0
+    if unknown > 0 then text = text .. " 未" .. unknown end
+    if cancelled > 0 then text = text .. " 取" .. cancelled end
+    return text
+end
+
 local function truncateUTF8(value, maximum)
     value = tostring(value or "")
     local index, characters = 1, 0
@@ -72,6 +91,56 @@ local function formatMoney(amount)
     return tostring(amount) .. " 铜"
 end
 
+local function ensureBulkConfirmRows(popup)
+    if popup.easyAuctionBulkRows then return popup.easyAuctionBulkRows end
+    local rows = {}
+    for index = 1, 5 do
+        local row = {}
+        local y = -58 - (index - 1) * 24
+        if index == 5 then y = y - 10 end
+        row.label = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        row.label:SetPoint("TOPLEFT", popup, "TOPLEFT", 20, y)
+        row.label:SetSize(104, 22)
+        row.label:SetJustifyH("CENTER")
+        row.value = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlight")
+        row.value:SetPoint("TOPLEFT", popup, "TOPLEFT", 132, y)
+        row.value:SetSize(168, 22)
+        row.value:SetJustifyH("RIGHT")
+        rows[index] = row
+    end
+    popup.easyAuctionBulkRows = rows
+    return rows
+end
+
+local function showBulkConfirmRows(popup, data)
+    if not popup then return end
+    popup:SetHeight(250)
+    local rows = ensureBulkConfirmRows(popup)
+    local values = data and data.rows or {}
+    for index = 1, #rows do
+        local rowData = values[index] or {}
+        local row = rows[index]
+        row.label:SetText(rowData.label or "")
+        row.value:SetText(rowData.value or "")
+        if index == 5 then
+            row.label:SetTextColor(1, 0.82, 0)
+            row.value:SetTextColor(1, 0.82, 0)
+        else
+            row.label:SetTextColor(1, 1, 1)
+            row.value:SetTextColor(1, 1, 1)
+        end
+        row.label:Show()
+        row.value:Show()
+    end
+end
+
+local function hideBulkConfirmRows(popup)
+    for _, row in ipairs(popup and popup.easyAuctionBulkRows or {}) do
+        row.label:Hide()
+        row.value:Hide()
+    end
+end
+
 function BulkMailView:_readAmount()
     if self.frame and self.amountUsesMoneyFrame and type(_G.MoneyInputFrame_GetCopper) == "function" then
         return math.max(0, math.floor(tonumber(_G.MoneyInputFrame_GetCopper(self.frame.amount)) or 0))
@@ -85,7 +154,11 @@ end
 function BulkMailView:_refreshTotalAmount()
     if not self.frame or not self.frame.totalAmount then return end
     local count = self.model and self.model:GetSelectionCount() or 0
-    self.frame.totalAmount:SetText("合计金额：" .. formatMoney(self:_readAmount() * count))
+    local postageEach = type(self.deps.getPostageEach) == "function"
+        and math.max(0, math.floor(tonumber(self.deps.getPostageEach()) or 0)) or 0
+    local postage = postageEach * count
+    self.frame.totalPostage:SetText("合计邮资成本：" .. formatMoney(postage))
+    self.frame.totalAmount:SetText("总支出：" .. formatMoney((self:_readAmount() + postageEach) * count))
 end
 
 function BulkMailView:_applyInitialExamples()
@@ -460,8 +533,12 @@ function BulkMailView:Create(parent)
         frame.amount:SetScript("OnTextChanged", function() self:_refreshTotalAmount() end)
         frame.amountLabel:SetText("单人金额（铜）")
     end
+    frame.totalPostage = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    frame.totalPostage:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -300)
+    frame.totalPostage:SetSize(286, 18)
+    frame.totalPostage:SetJustifyH("LEFT")
     frame.totalAmount = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.totalAmount:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -302)
+    frame.totalAmount:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -318)
     frame.totalAmount:SetSize(286, 18)
     frame.totalAmount:SetJustifyH("LEFT")
 
@@ -511,8 +588,8 @@ function BulkMailView:Create(parent)
     self:_applyInitialExamples()
 
     frame.errorBanner = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    frame.errorBanner:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -327)
-    frame.errorBanner:SetSize(286, 18)
+    frame.errorBanner:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -338)
+    frame.errorBanner:SetSize(286, 16)
     frame.errorBanner:SetJustifyH("LEFT")
     if frame.errorBanner.SetJustifyV then frame.errorBanner:SetJustifyV("TOP") end
     if frame.errorBanner.SetWordWrap then frame.errorBanner:SetWordWrap(true) end
@@ -542,11 +619,11 @@ function BulkMailView:Create(parent)
     end)
     frame.send = createFrame("Button", nil, frame, "UIPanelButtonTemplate")
     frame.send:SetSize(286, 24)
-    frame.send:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -350)
+    frame.send:SetPoint("TOPLEFT", frame, "TOPLEFT", 4, -360)
     frame.send:SetText("开始批量邮寄")
     frame.send:SetScript("OnClick", function() self:ConfirmStart() end)
     frame.summary = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    frame.summary:SetPoint("TOPLEFT", frame, "TOPLEFT", 304, -354)
+    frame.summary:SetPoint("TOPLEFT", frame, "TOPLEFT", 304, -364)
     frame.summary:SetSize(442, 18)
     frame.summary:SetJustifyH("LEFT")
     frame.selectionSummary = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -558,7 +635,8 @@ function BulkMailView:Create(parent)
     self.composeWidgets = {
         frame.grid, frame.scroll, frame.search, frame.subject, frame.amount, frame.bodyPaper,
         frame.bodyContainer, frame.bodyScrollBar, frame.subjectLabel,
-        frame.amountLabel, frame.totalAmount, frame.selectAll, frame.clear, frame.send, frame.summary,
+        frame.amountLabel, frame.totalPostage, frame.totalAmount,
+        frame.selectAll, frame.clear, frame.send, frame.summary,
         frame.selectionSummary,
         frame.errorBanner, frame.rankButton, frame.onlineOnly, frame.onlineOnly.text,
         frame.loading,
@@ -785,9 +863,7 @@ function BulkMailView:RefreshHistory()
             row:Show()
             local timestamp = _G.date and _G.date("%m-%d %H:%M", record.startedAt or 0)
                 or tostring(record.startedAt or "")
-            row.text:SetText(string.format("%s  %s  %d人  成%d 败%d 未知%d",
-                timestamp, record.sourceKind or "", record.selectedCount or #record.recipients,
-                record.successCount or 0, record.failedCount or 0, record.unknownCount or 0))
+            row.text:SetText(formatBatchTitle(record, timestamp))
             row.selected = record.id == self.selectedHistoryId
             if row.SetBackdropBorderColor then
                 if row.selected then row:SetBackdropBorderColor(1, 0.82, 0, 1)
@@ -831,7 +907,6 @@ function BulkMailView:_refreshGroupMenu()
     if self.deps.listRecipientSources then descriptors = self.deps.listRecipientSources() end
     if not descriptors then
         descriptors = {
-            { id = "builtin:guild", label = "公会", sourceKind = "guild" },
             { id = "builtin:alts", label = "小号", sourceKind = "custom", sourceGroupId = "builtin:alts" },
             { id = "builtin:friends", label = "好友", sourceKind = "custom", sourceGroupId = "builtin:friends" },
         }
@@ -1052,8 +1127,13 @@ function BulkMailView:ConfirmStart()
     local count = #draft.recipients
     local amount = math.max(0, math.floor(tonumber(draft.amountEach) or 0))
     local postage = validation and validation.postageEach or 0
-    local summary = string.format("确认向 %d 人分别邮寄 %d 铜？\n金币小计：%d 铜\n预计邮资：%d 铜\n预计总支出：%d 铜",
-        count, amount, count * amount, count * postage, count * (amount + postage))
+    local rows = {
+        { label = "收件人数", value = count .. " 人" },
+        { label = "单人金额", value = formatMoney(amount) },
+        { label = "金币合计", value = formatMoney(count * amount) },
+        { label = "邮资成本", value = formatMoney(count * postage) },
+        { label = "总支出", value = formatMoney(count * (amount + postage)) },
+    }
     local function start()
         local batchId, err
         if self.deps.onStart then batchId, err = self.deps.onStart(draft) end
@@ -1064,10 +1144,15 @@ function BulkMailView:ConfirmStart()
             _G.StaticPopupDialogs.EASYAUCTION_BULK_SEND_CONFIRM = {
                 text = "%s", button1 = _G.ACCEPT or "确定", button2 = _G.CANCEL or "取消",
                 OnAccept = function(_, data) if data and data.callback then data.callback() end end,
+                OnShow = showBulkConfirmRows,
+                OnHide = hideBulkConfirmRows,
                 timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
             }
         end
-        _G.StaticPopup_Show("EASYAUCTION_BULK_SEND_CONFIRM", summary, nil, { callback = start })
+        _G.StaticPopup_Show("EASYAUCTION_BULK_SEND_CONFIRM", "|cffffd100确认批量邮寄|r", nil, {
+            callback = start,
+            rows = rows,
+        })
     else
         start()
     end

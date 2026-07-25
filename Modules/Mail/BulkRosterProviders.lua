@@ -218,7 +218,7 @@ function GroupProvider:Refresh()
     self.members = {}
     for index = 1, #(raw or {}) do
         local member = normalizeMember(raw[index], self.sourceKind, self.currentRealm, self.currentKey)
-        if member then
+        if member and (self.sourceKind ~= "raid" or not member.isSelf) then
             member.rosterIndex = member.rosterIndex or index
             self.members[#self.members + 1] = member
         end
@@ -277,18 +277,7 @@ function GuildProvider:_nativeList()
     return members, ranks
 end
 
-function GuildProvider:Refresh()
-    self.generation = self.generation + 1
-    self.loading = true
-    self.stale = true
-    self:_request()
-    notify(self)
-    return self.generation
-end
-
-function GuildProvider:OnRosterUpdate()
-    local raw, ranks
-    if self.deps.listGuild then raw, ranks = self.deps.listGuild() else raw, ranks = self:_nativeList() end
+function GuildProvider:_applyRoster(raw, ranks)
     self.members, self.ranks = {}, clone(ranks or {})
     for index = 1, #(raw or {}) do
         local member = normalizeMember(raw[index], "guild", self.currentRealm, self.currentKey)
@@ -303,6 +292,25 @@ function GuildProvider:OnRosterUpdate()
         if leftRank ~= rightRank then return leftRank < rightRank end
         return string.lower(left.displayName) < string.lower(right.displayName)
     end)
+end
+
+function GuildProvider:Refresh()
+    self.generation = self.generation + 1
+    local raw, ranks
+    if self.deps.listGuild then raw, ranks = self.deps.listGuild() else raw, ranks = self:_nativeList() end
+    self:_applyRoster(raw, ranks)
+    local hasCachedRoster = #self.members > 0
+    self.loading = not hasCachedRoster
+    self.stale = not hasCachedRoster
+    self:_request()
+    notify(self)
+    return self.generation
+end
+
+function GuildProvider:OnRosterUpdate()
+    local raw, ranks
+    if self.deps.listGuild then raw, ranks = self.deps.listGuild() else raw, ranks = self:_nativeList() end
+    self:_applyRoster(raw, ranks)
     self.loading = false
     self.stale = false
     notify(self)

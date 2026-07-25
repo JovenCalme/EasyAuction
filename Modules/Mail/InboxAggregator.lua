@@ -81,6 +81,31 @@ local function addSource(entry, source)
     entry.minDaysLeft = updateMinimum(entry.minDaysLeft, source.daysLeft)
 end
 
+local function sourceMailIdentity(source, fallback)
+    local mailKey = source.mailKey
+    if type(mailKey) == "table" then
+        return tostring(mailKey.fingerprint) .. ":" .. tostring(mailKey.duplicateOrdinal)
+    end
+    if source.mailIndex ~= nil then return "index:" .. tostring(source.mailIndex) end
+    return "source:" .. tostring(source.sourceKey or fallback)
+end
+
+local function summarizeReturnability(entry)
+    local byMail = {}
+    for index = 1, #entry.sources do
+        local source = entry.sources[index]
+        local key = sourceMailIdentity(source, index)
+        local canReturn = source.canReturn == true
+        if byMail[key] == nil or not canReturn then byMail[key] = canReturn end
+    end
+    local returnable, nonReturnable = 0, 0
+    for _, canReturn in pairs(byMail) do
+        if canReturn then returnable = returnable + 1 else nonReturnable = nonReturnable + 1 end
+    end
+    entry.returnableMailCount = returnable
+    entry.nonReturnableMailCount = nonReturnable
+end
+
 local function matchesCategory(attachment, categoryId, registry)
     if categoryId == nil or categoryId == "all" then return true end
     if categoryId == "money" then return false end
@@ -130,6 +155,8 @@ function Aggregator.Build(snapshot, settings)
             end
         end
     end
+
+    for index = 1, #entries do summarizeReturnability(entries[index]) end
 
     return entries
 end

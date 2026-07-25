@@ -12,7 +12,7 @@ local CELL_SIZE = 37
 local CELL_GAP = 7
 local CATEGORY_BUTTON_WIDTH = 42
 local CATEGORY_BUTTON_HEIGHT = 21
-local CATEGORY_BUTTON_STEP = 23
+local CATEGORY_BUTTON_STEP = 22
 
 local function invoke(target, method, ...)
     if target and type(target[method]) == "function" then
@@ -228,6 +228,10 @@ function View:_createFrames(parent)
             invoke(button.__eaQualityBorder, "SetAllPoints", textureFor(button) or button)
             invoke(button.__eaQualityBorder, "SetTexture", "Interface\\Common\\WhiteIconFrame")
         end
+        button.__eaReturnStatus = invoke(button, "CreateFontString", nil, "OVERLAY", "GameFontNormalSmall")
+        invoke(button.__eaReturnStatus, "SetSize", CELL_SIZE, 12)
+        invoke(button.__eaReturnStatus, "SetPoint", "TOP", button, "TOP", 0, -1)
+        invoke(button.__eaReturnStatus, "SetJustifyH", "CENTER")
         local cellIndex = index
         invoke(button, "SetScript", "OnClick", function(_, mouseButton)
             self:_onClick(cellIndex, mouseButton)
@@ -334,6 +338,19 @@ function View:_renderCell(index)
         invoke(button.__eaSearchOverlay, "Show")
     else
         invoke(button.__eaSearchOverlay, "Hide")
+    end
+
+    if model.entryId and model.returnState == "action-required" then
+        invoke(button.__eaReturnStatus, "SetText", "转寄")
+        invoke(button.__eaReturnStatus, "SetTextColor", 1, 0.2, 0.2)
+        invoke(button.__eaReturnStatus, "Show")
+    elseif model.entryId and model.returnState == "returnable" then
+        invoke(button.__eaReturnStatus, "SetText", "可退")
+        invoke(button.__eaReturnStatus, "SetTextColor", 0.2, 1, 0.2)
+        invoke(button.__eaReturnStatus, "Show")
+    else
+        invoke(button.__eaReturnStatus, "SetText", "")
+        invoke(button.__eaReturnStatus, "Hide")
     end
 
     if model.entryId and model.enabled and self.enabled then

@@ -268,7 +268,7 @@ function Settings:CreateControls(parent, options)
     if not options.compact then
         shortcutTitle = container:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
         shortcutTitle:SetPoint("TOPLEFT", container, "TOPLEFT", 12, -118)
-        shortcutTitle:SetText("发件快捷")
+        shortcutTitle:SetText("一键发件")
         if style and type(style.SkinText) == "function" then style:SkinText(shortcutTitle, "accent") end
     end
     local enableAltClickToggle = createToggle(options.compact and "Alt附件" or "Alt+左键快速附件",

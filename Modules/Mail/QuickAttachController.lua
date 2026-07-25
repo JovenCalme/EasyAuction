@@ -7,11 +7,13 @@ local Mail = ns.Mail
 local QuickAttachController = {}
 QuickAttachController.__index = QuickAttachController
 
+-- 与 Postal QuickAttach 的 Cata/Mists 分支保持相同顺序和 classID/subclassID；标签为窄按钮短名。
 local ItemCategoryRegistry = {
     order = {
         "trade_cloth", "trade_leather", "trade_metal", "trade_cooking", "trade_herb",
         "trade_enchant", "trade_jewel", "trade_parts", "trade_element", "trade_device",
         "trade_explosive", "trade_material", "trade_other", "trade_upgrade", "trade_all",
+        "consumable_potion",
     },
     definitions = {
         trade_cloth = { label = "布料", tooltip = "布", classID = 7, subclassID = 5 },
@@ -27,14 +29,21 @@ local ItemCategoryRegistry = {
         trade_explosive = { label = "炸药", tooltip = "爆炸物", classID = 7, subclassID = 2 },
         trade_material = { label = "材料", tooltip = "其它材料", classID = 7, subclassID = 13 },
         trade_other = { label = "其他", tooltip = "其它贸易品", classID = 7, subclassID = 11 },
-        trade_upgrade = { label = "强化", tooltip = "物品强化", classID = 7, subclassID = 14 },
+        trade_upgrade = { label = "强化", tooltip = "物品附魔", classID = 7, subclassID = 14 },
         trade_all = { label = "贸易", tooltip = "全部贸易品", classID = 7, allSubclasses = true },
+        consumable_potion = {
+            label = "药水", tooltip = "药水、药剂与合剂", classID = 0,
+            subclassIDs = { [1] = true, [2] = true, [3] = true },
+        },
     },
 }
 
 function ItemCategoryRegistry:Matches(categoryId, item)
     local definition = self.definitions[categoryId]
     if not definition or tonumber(item and item.classID) ~= definition.classID then return false end
+    if definition.subclassIDs then
+        return definition.subclassIDs[tonumber(item.subclassID)] == true
+    end
     return definition.allSubclasses == true or tonumber(item.subclassID) == definition.subclassID
 end
 
@@ -49,6 +58,7 @@ function ItemCategoryRegistry:List()
             tooltip = definition.tooltip,
             classID = definition.classID,
             subclassID = definition.subclassID,
+            subclassIDs = definition.subclassIDs,
             allSubclasses = definition.allSubclasses,
         }
     end

@@ -40,6 +40,10 @@ local function entryModel(entry, visibleSet, options)
     local searchMatch = visibleSet == nil or visibleSet[entry.id] == true
     local showQuality = options.qualityColors == true
         and type(entry.quality) == "number" and entry.quality ~= 1
+    local returnableMailCount = math.max(0, tonumber(entry.returnableMailCount) or 0)
+    local nonReturnableMailCount = math.max(0, tonumber(entry.nonReturnableMailCount) or 0)
+    local returnState = nonReturnableMailCount > 0 and "action-required"
+        or returnableMailCount > 0 and "returnable" or nil
     return {
         entry = entry,
         entryId = entry.id,
@@ -52,6 +56,9 @@ local function entryModel(entry, visibleSet, options)
         minDaysLeft = entry.minDaysLeft,
         quality = entry.quality,
         sources = entry.sources,
+        returnableMailCount = returnableMailCount,
+        nonReturnableMailCount = nonReturnableMailCount,
+        returnState = returnState,
         expiryState = expiryState(entry.minDaysLeft),
         showQuality = showQuality,
         searchMatch = searchMatch,
@@ -69,6 +76,9 @@ local function emptyModel(cellIndex)
         icon = nil,
         totalCount = 0,
         totalMoney = 0,
+        returnableMailCount = 0,
+        nonReturnableMailCount = 0,
+        returnState = nil,
         expiryState = nil,
         showQuality = false,
         searchMatch = true,

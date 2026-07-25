@@ -130,7 +130,7 @@ local function normalizeHeader(raw)
         canReply = raw.canReply == true,
         isGM = raw.isGM == true,
         canDelete = raw.canDelete == true,
-        canReturn = raw.canReturn == true,
+        canReturn = raw.wasReturned ~= true and raw.canReply == true,
         rawCapabilities = raw.capabilities,
     }
 end
@@ -352,7 +352,7 @@ function Repository:Snapshot()
         capabilities.canTakeMoney = capabilities.canTakeMoney == true or header.money > 0
         capabilities.canTakeItems = not capabilities.isCOD
             and (capabilities.canTakeItems == true or #attachments > 0)
-        capabilities.canReturn = capabilities.canReturn == true or header.canReturn
+        capabilities.canReturn = not header.wasReturned and header.canReply
         capabilities.canDelete = capabilities.canDelete == true or header.canDelete
 
         local invoice
@@ -425,6 +425,8 @@ function Repository:Snapshot()
             attachment.canTakeItems = record.capabilities.canTakeItems == true
             attachment.canDelete = record.capabilities.canDelete
             attachment.canReturn = record.capabilities.canReturn
+            attachment.wasReturned = record.wasReturned
+            attachment.canReply = record.canReply
             attachment.invoice = record.invoice
             if not attachment.itemKey then
                 attachment.itemKey = "pending:" .. sourceKey
@@ -450,6 +452,8 @@ function Repository:Snapshot()
                 isCOD = record.capabilities.isCOD == true,
                 canDelete = record.capabilities.canDelete,
                 canReturn = record.capabilities.canReturn,
+                wasReturned = record.wasReturned,
+                canReply = record.canReply,
                 invoice = record.invoice,
             }
             snapshot.sourcesByKey[sourceKey] = record.moneySource

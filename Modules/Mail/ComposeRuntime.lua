@@ -60,6 +60,7 @@ function ComposeRuntime.New(deps)
         hooksInstalled = false,
         bagHookInstalled = false,
         bagTooltipHookInstalled = false,
+        moneyHookInstalled = false,
         nativeCanSendGuardHookInstalled = false,
         nativeEnableSendGuardHookInstalled = false,
     }, ComposeRuntime)
@@ -95,6 +96,7 @@ function ComposeRuntime:_ensureServices()
         self.attachments = Mail.AttachmentService.New({
             compat = self:_compat(), arbiter = self:_arbiter(),
             generation = function() return self:_sessionGeneration() end,
+            onComplete = function(result) self:_onAttachmentComplete(result) end,
         })
     end
     if not self.quickAttach and Mail.QuickAttachController then
@@ -874,6 +876,29 @@ function ComposeRuntime:_toggleGroupManager(createFrame)
     manager:Show()
 end
 
+function ComposeRuntime:_onAttachmentComplete(result)
+    if not result or not self.lastAttachmentOperation then return false end
+    if result.operationId and result.operationId ~= self.lastAttachmentOperation then return false end
+    if result.state == "SUCCEEDED" then
+        self:_setStatus("附件已就绪", false)
+        local autoSend = self.lastAttachmentAutoSend == true
+        self.lastAttachmentOperation = nil
+        self.lastAttachmentAutoSend = nil
+        if autoSend then
+            local sent, err = self:SendCurrentDraft()
+            if not sent then self:_setStatus((err and (err.message or err.code)) or "发送失败", true) end
+        end
+        return true
+    end
+    if result.state == "FAILED" or result.state == "INDETERMINATE" or result.state == "CANCELLED" then
+        self:_setStatus(result.error and result.error.message or "附件操作失败", true)
+        self.lastAttachmentOperation = nil
+        self.lastAttachmentAutoSend = nil
+        return true
+    end
+    return false
+end
+
 function ComposeRuntime:_startAttachment(operationId, err, autoSend)
     if not operationId then
         self.lastAttachmentAutoSend = nil
@@ -883,6 +908,7 @@ function ComposeRuntime:_startAttachment(operationId, err, autoSend)
     self.lastAttachmentOperation = operationId
     self.lastAttachmentAutoSend = autoSend == true
     self:_setStatus("正在确认附件", false)
+    if self.attachments then self:_onAttachmentComplete(self.attachments:GetResult(operationId)) end
 end
 
 function ComposeRuntime:_bagShortcutVisible()
@@ -1123,6 +1149,14 @@ function ComposeRuntime:_installHooks(recipientBox)
         end)
         self.nativeCanSendGuardHookInstalled = true
     end
+    local moneyInput = self.deps.moneyInput or _G.SendMailMoney
+    if not self.moneyHookInstalled and _G.hooksecurefunc and moneyInput
+        and type(moneyInput.onValueChangedFunc) == "function" then
+        _G.hooksecurefunc(moneyInput, "onValueChangedFunc", function()
+            if self.enabled then self:_onMoneyChanged() end
+        end)
+        self.moneyHookInstalled = true
+    end
     if not self.nativeEnableSendGuardHookInstalled and _G.hooksecurefunc
         and type(_G.SendMailFrame_EnableSendMailButton) == "function" then
         _G.hooksecurefunc("SendMailFrame_EnableSendMailButton", function()
@@ -1139,7 +1173,7 @@ function ComposeRuntime:_installHooks(recipientBox)
 end
 
 function ComposeRuntime:_onMoneyChanged()
-    if not self.enabled or not _G.SendMailSubjectEditBox then return end
+    if not self.enabled or not self.compose or not _G.SendMailSubjectEditBox then return end
     local compat = self:_compat()
     local snapshot = compat and compat:GetOutgoingSnapshot() or nil
     if not snapshot then return end
@@ -1203,18 +1237,7 @@ function ComposeRuntime:OnWoWEvent(event)
     if event == "MAIL_SEND_INFO_UPDATE" or event == "BAG_UPDATE_DELAYED" then
         if self.attachments then self.attachments:OnWoWEvent(event) end
         if self.lastAttachmentOperation and self.attachments then
-            local result = self.attachments:GetResult(self.lastAttachmentOperation)
-            if result and result.state == "SUCCEEDED" then
-                self:_setStatus("附件已就绪", false)
-                local autoSend = self.lastAttachmentAutoSend == true
-                self.lastAttachmentOperation = nil
-                self.lastAttachmentAutoSend = nil
-                if autoSend then self:SendCurrentDraft() end
-            elseif result and (result.state == "FAILED" or result.state == "INDETERMINATE") then
-                self:_setStatus(result.error and result.error.message or "附件操作失败", true)
-                self.lastAttachmentOperation = nil
-                self.lastAttachmentAutoSend = nil
-            end
+            self:_onAttachmentComplete(self.attachments:GetResult(self.lastAttachmentOperation))
         end
     end
 end

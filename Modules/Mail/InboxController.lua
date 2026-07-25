@@ -106,6 +106,84 @@ function Controller:_categories()
     return {}
 end
 
+function Controller:_ensureNativeInboxLabels()
+    if self.nativeInboxLabels then return self.nativeInboxLabels end
+    local labels = {}
+    local pageSize = math.max(1, tonumber(_G and _G.INBOXITEMS_TO_DISPLAY) or 7)
+    for row = 1, pageSize do
+        local item = _G and _G["MailItem" .. row]
+        if item and type(item.CreateFontString) == "function" then
+            local label = item:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            label:SetSize(44, 12)
+            local expireTime = _G["MailItem" .. row .. "ExpireTime"]
+            if expireTime then
+                label:SetPoint("RIGHT", expireTime, "RIGHT", -48, 0)
+            else
+                label:SetPoint("TOPRIGHT", item, "TOPRIGHT", -48, -4)
+            end
+            label:SetJustifyH("CENTER")
+            label:Hide()
+            labels[row] = label
+        end
+    end
+    self.nativeInboxLabels = labels
+    return labels
+end
+
+function Controller:_hideNativeInboxLabels()
+    for _, label in pairs(self.nativeInboxLabels or {}) do label:Hide() end
+end
+
+function Controller:RefreshNativeInboxLabels()
+    if not self.enabled then self:_hideNativeInboxLabels() return false end
+    local labels = self:_ensureNativeInboxLabels()
+    local compat = self:_compat()
+    if not compat or type(compat.GetInboxCounts) ~= "function"
+        or type(compat.GetHeader) ~= "function" then
+        self:_hideNativeInboxLabels()
+        return false
+    end
+    local current = compat:GetInboxCounts()
+    current = tonumber(current) or 0
+    local pageSize = math.max(1, tonumber(_G and _G.INBOXITEMS_TO_DISPLAY) or 7)
+    local page = math.max(1, tonumber(_G and _G.InboxFrame and _G.InboxFrame.pageNum) or 1)
+    for row = 1, pageSize do
+        local label = labels[row]
+        local mailIndex = row + (page - 1) * pageSize
+        local header = mailIndex <= current and compat:GetHeader(mailIndex) or nil
+        local hasMail = header and (tostring(header.sender or "") ~= ""
+            or tostring(header.subject or "") ~= "" or header.packageIcon ~= nil
+            or (tonumber(header.money) or 0) > 0 or (tonumber(header.itemCount) or 0) > 0)
+        if label and hasMail then
+            if header.canReturn == true then
+                label:SetText("可退")
+                label:SetTextColor(0.2, 1, 0.2)
+            else
+                label:SetText("转寄")
+                label:SetTextColor(1, 0.2, 0.2)
+            end
+            label:Show()
+        elseif label then
+            label:SetText("")
+            label:Hide()
+        end
+    end
+    return true
+end
+
+function Controller:_installNativeInboxHook()
+    if self.nativeInboxHookInstalled then return true end
+    if _G and type(_G.hooksecurefunc) == "function"
+        and type(_G.InboxFrame_Update) == "function" then
+        _G.hooksecurefunc("InboxFrame_Update", function()
+            if self.enabled then self:RefreshNativeInboxLabels() end
+        end)
+        self.nativeInboxHookInstalled = true
+        return true
+    end
+    return false
+end
+
 function Controller:_ensureRepository()
     if self.repository then return self.repository end
     if self.deps.repository then
@@ -272,6 +350,7 @@ function Controller:Refresh(reason)
         view:SetSummary(snapshot.current, snapshot.total)
     end
     view:Bind(projection)
+    self:RefreshNativeInboxLabels()
     return projection
 end
 
@@ -343,6 +422,7 @@ function Controller:OnSessionStart(payload)
     if queue and type(queue.SetAccepting) == "function" then queue:SetAccepting(true) end
     local view = self:_ensureView()
     if view and type(view.SetEnabled) == "function" then view:SetEnabled(true) end
+    self:RefreshNativeInboxLabels()
     self:MarkDirty(payload and payload.reason or "MAIL_SESSION_STARTED")
 
 end
@@ -355,12 +435,16 @@ function Controller:OnSessionStop(payload)
     end
     local view = self.view
     if view and type(view.Hide) == "function" then view:Hide() end
+    self:_hideNativeInboxLabels()
 end
 
 function Controller:OnWoWEvent(event, ...)
     local queue = self:_ensureQueue()
     if queue and type(queue.OnWoWEvent) == "function" then
         queue:OnWoWEvent(event, ...)
+    end
+    if event == "MAIL_INBOX_UPDATE" or event == "MAIL_SHOW" or event == "MAIL_SUCCESS" then
+        self:RefreshNativeInboxLabels()
     end
 end
 
@@ -371,6 +455,7 @@ function Controller:Enable(context)
     self.generation = context and context.generation or self.generation
     self:_ensureRepository()
     self:_ensureQueue()
+    self:_installNativeInboxHook()
     local view = self:_ensureView()
     if not view then
         self.enabled = false
@@ -450,6 +535,7 @@ function Controller:Disable(context)
     if self.view then
         if type(self.view.Hide) == "function" then self.view:Hide() end
     end
+    self:_hideNativeInboxLabels()
     return true
 end
 

@@ -43,9 +43,8 @@ local function append(lines, text, color)
     lines[#lines + 1] = { text = tostring(text or ""), color = color }
 end
 
-local function countSourceMails(sources)
-    local seen = {}
-    local count = 0
+local function summarizeSourceMails(sources)
+    local states = {}
     for index = 1, #sources do
         local source = sources[index]
         local mailKey = source.mailKey
@@ -57,12 +56,15 @@ local function countSourceMails(sources)
         else
             key = "source:" .. tostring(index)
         end
-        if not seen[key] then
-            seen[key] = true
-            count = count + 1
-        end
+        local canReturn = source.canReturn == true
+        if states[key] == nil or not canReturn then states[key] = canReturn end
     end
-    return count
+    local count, returnable, nonReturnable = 0, 0, 0
+    for _, canReturn in pairs(states) do
+        count = count + 1
+        if canReturn then returnable = returnable + 1 else nonReturnable = nonReturnable + 1 end
+    end
+    return count, returnable, nonReturnable
 end
 
 function TooltipBuilder.Build(entry, options)
@@ -71,13 +73,15 @@ function TooltipBuilder.Build(entry, options)
     local formatMoney = options.formatMoney or defaultMoney
     local formatDuration = options.formatDuration or defaultDuration
     local sources = entry.sources or {}
-    local sourceCount = countSourceMails(sources)
+    local sourceCount, returnableMailCount, nonReturnableMailCount = summarizeSourceMails(sources)
     local model = {
         kind = entry.kind,
         title = entry.displayName or (entry.kind == "money" and "金币" or "未知物品"),
         itemLink = entry.itemLink,
         lines = {},
         sourceCount = sourceCount,
+        returnableMailCount = returnableMailCount,
+        nonReturnableMailCount = nonReturnableMailCount,
     }
     local firstSource = sources[1]
     if firstSource then
@@ -100,6 +104,13 @@ function TooltipBuilder.Build(entry, options)
         if daysLeft and (not earliest or daysLeft < earliest) then earliest = daysLeft end
     end
     if earliest then append(model.lines, "最早到期：" .. formatDuration(earliest)) end
+    if nonReturnableMailCount > 0 then
+        append(model.lines, string.format("退信状态：可退 %d 封，需转寄 %d 封",
+            returnableMailCount, nonReturnableMailCount), { 1, 0.25, 0.25 })
+    elseif returnableMailCount > 0 then
+        append(model.lines, string.format("退信状态：%d 封均可退信",
+            returnableMailCount), { 0.2, 1, 0.2 })
+    end
     append(model.lines, "左键领取全部，右键仅领取一封", { 0.75, 0.75, 0.75 })
 
     return model

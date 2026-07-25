@@ -53,7 +53,9 @@ function AttachmentService.New(deps)
         idFactory = deps.idFactory,
         maxAttachments = tonumber(deps.maxAttachments or _G.ATTACHMENTS_MAX_SEND) or 12,
         timeout = tonumber(deps.timeoutSeconds or deps.timeout) or 5,
+        ackDelay = tonumber(deps.ackDelaySeconds or deps.ackDelay) or 0.01,
         schedule = deps.schedule,
+        onComplete = deps.onComplete,
         operations = {},
         active = nil,
         nextId = 0,
@@ -74,11 +76,14 @@ end
 
 function AttachmentService._cancelTimer(_, operation)
     if operation.timer and operation.timer.Cancel then operation.timer:Cancel() end
+    if operation.ackTimer and operation.ackTimer.Cancel then operation.ackTimer:Cancel() end
     operation.timer = nil
+    operation.ackTimer = nil
 end
 
 function AttachmentService:_scheduleTimeout(operation)
-    self:_cancelTimer(operation)
+    if operation.timer and operation.timer.Cancel then operation.timer:Cancel() end
+    operation.timer = nil
     local function timeout()
         if self.active ~= operation or operation.state ~= "AWAITING_ACK" then return end
         local snapshot = self.compat.GetOutgoingSnapshot and self.compat:GetOutgoingSnapshot() or nil
@@ -99,12 +104,31 @@ function AttachmentService:_scheduleTimeout(operation)
     end
 end
 
+function AttachmentService:_scheduleAckProbe(operation)
+    if operation.ackTimer and operation.ackTimer.Cancel then operation.ackTimer:Cancel() end
+    operation.ackTimer = nil
+    local function probe()
+        operation.ackTimer = nil
+        if self.active ~= operation or operation.state ~= "AWAITING_ACK" then return end
+        local snapshot = self.compat.GetOutgoingSnapshot and self.compat:GetOutgoingSnapshot() or nil
+        if snapshot then self:OnOutgoingSnapshot(snapshot) end
+    end
+    if self.schedule then
+        operation.ackTimer = self.schedule(self.ackDelay, probe)
+    elseif _G.C_Timer and _G.C_Timer.NewTimer then
+        operation.ackTimer = _G.C_Timer.NewTimer(self.ackDelay, probe)
+    elseif _G.C_Timer and _G.C_Timer.After then
+        _G.C_Timer.After(self.ackDelay, probe)
+    end
+end
+
 function AttachmentService:_finish(operation, state, err)
     self:_cancelTimer(operation)
     operation.state = state
     operation.error = err
     operation.finished = true
     self:_release(operation, state == "INDETERMINATE" and "INDETERMINATE" or state, err)
+    if self.onComplete then pcall(self.onComplete, self:GetResult(operation.id)) end
     return state == "SUCCEEDED"
 end
 
@@ -138,6 +162,9 @@ function AttachmentService:_dispatchNext(operation)
     end
     operation.dispatched = true
     operation.state = "AWAITING_ACK"
+    local after = self.compat.GetOutgoingSnapshot and self.compat:GetOutgoingSnapshot() or nil
+    if after and self:OnOutgoingSnapshot(after) then return true end
+    self:_scheduleAckProbe(operation)
     self:_scheduleTimeout(operation)
     return true
 end

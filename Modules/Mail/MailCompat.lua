@@ -103,12 +103,11 @@ function Compat:GetHeader(index)
             })
         end
     end
-    local canDelete, hasDeleteDecision = false, false
+    local canDelete = false
     local canDeleteCallback = apiValue(self, "InboxItemCanDelete")
     if type(canDeleteCallback) == "function" then
         local ok, value = pcall(canDeleteCallback, index)
         if ok then
-            hasDeleteDecision = true
             canDelete = value == true
         end
     end
@@ -128,7 +127,7 @@ function Compat:GetHeader(index)
         canReply = values[12] == true,
         isGM = values[13] == true,
         canDelete = canDelete,
-        canReturn = hasDeleteDecision and not canDelete,
+        canReturn = values[10] ~= true and values[12] == true,
         isCOD = (tonumber(values[6]) or 0) > 0,
     }
 end

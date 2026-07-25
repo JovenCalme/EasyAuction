@@ -104,6 +104,13 @@ local function normalizeConfig(mail)
     end
 end
 
+local function migrateComposeShortcutDefaults(mail)
+    if mail.migrations.composeShortcutsDefaultOff then return end
+    mail.compose.enableAltClick = false
+    mail.compose.autoSend = false
+    mail.migrations.composeShortcutsDefaultOff = true
+end
+
 local function defaultRealmFactionKey()
     local realm = type(_G.GetRealmName) == "function" and _G.GetRealmName() or "Unknown"
     local faction
@@ -257,6 +264,7 @@ function Config:Initialize()
     end
     migrateInbox(mail, legacyInbox)
     migratePostal(mail, root.__MailGlobal, legacyPostal)
+    migrateComposeShortcutDefaults(mail)
     normalizeConfig(mail)
     mail.schemaVersion = Mail.SCHEMA_VERSION
     root.__MailGlobal.schemaVersion = Mail.SCHEMA_VERSION
@@ -302,6 +310,7 @@ function Config:RetryLegacyMigrations()
     end
     migrateInbox(mail, legacyInbox)
     migratePostal(mail, globalConfig, legacyPostal)
+    migrateComposeShortcutDefaults(mail)
     normalizeConfig(mail)
     return true
 end

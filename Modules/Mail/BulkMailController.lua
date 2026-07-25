@@ -121,6 +121,10 @@ function BulkMailController:_ensureView()
         recipientGroupRepository = self.groups,
         listRecipientSources = function() return self:ListRecipientSources() end,
         validate = function(draft) return self.coordinator:Validate(draft) end,
+        getPostageEach = function()
+            local compat = self:_compat()
+            return compat and compat.GetSendPrice and compat:GetSendPrice() or 0
+        end,
         onStart = function(draft) return self:Start(draft) end,
         onContinue = function() return self:Continue() end,
         onPrepareRetryFailed = function(batchId) return self.coordinator:PrepareRetryFailed(batchId) end,
@@ -130,7 +134,7 @@ function BulkMailController:_ensureView()
         onFilterChanged = function(filter)
             config.bulk.guildRankFilter = clone(filter.rankIndices or {})
         end,
-        onActivated = function() return self:RefreshRoster("TAB_ACTIVATED") end,
+        onActivated = function() return self:OnTabActivated() end,
         onDeactivated = function(reason) return self:OnTabDeactivated(reason) end,
     })
     local parent = self.deps.parent or _G.MailFrame or _G.UIParent
@@ -153,7 +157,6 @@ end
 
 function BulkMailController:ListRecipientSources()
     local result = {
-        { id = "builtin:guild", label = "公会", sourceKind = "guild" },
         { id = ALT_SOURCE_ID, label = "小号", sourceKind = "custom", sourceGroupId = ALT_SOURCE_ID },
         { id = FRIEND_SOURCE_ID, label = "好友", sourceKind = "custom", sourceGroupId = FRIEND_SOURCE_ID },
     }
@@ -218,15 +221,11 @@ end
 function BulkMailController:OnSessionStart()
     self.active = true
     self:_anchorView()
-    local config = self:_config()
-    local sourceKind = config.bulk.lastSourceKind or "raid"
-    local groupId = config.bulk.lastSourceGroupId
-    if sourceKind == "party" then sourceKind = "raid" end
-    if sourceKind == "custom" and groupId ~= ALT_SOURCE_ID and groupId ~= FRIEND_SOURCE_ID
-        and (not groupId or not self.groups:Get(groupId)) then
-        sourceKind, groupId = "raid", nil
-    end
-    self:SetSource(sourceKind, groupId)
+    self:OnTabActivated()
+end
+
+function BulkMailController:OnTabActivated()
+    return self:SetSource("raid", nil)
 end
 
 function BulkMailController:OnSessionStop()

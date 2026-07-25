@@ -1,4 +1,4 @@
-local ADDON_VERSION = "3.3.2"
+local ADDON_VERSION = "3.3.3"
 local EAStyle = _G.EasyAuctionStyle
 
 local function EA_ChangelogSkinFrame(frame, role)
@@ -70,6 +70,15 @@ local function EA_ChangelogLine(parent, alpha)
 end
 
 local UPDATE_NOTES = {
+    {
+        version = "3.3.3",
+        date = "2026-07-25",
+        note = [[
+- 收件箱和邮包新增“可退 / 转寄”提示，方便及时处理不能再次退回的邮件，避免过期损失。
+- 闪寄更加稳定：修复公会名单刷新问题，默认显示团队并隐藏自己，自定义组补充好友名单。
+- 优化批量邮寄金额统计和确认窗口，清楚显示邮资与总支出，核对信息更方便。
+]],
+    },
     {
         version = "3.3.2",
         date = "2026-07-24",
@@ -471,8 +480,18 @@ local function EnsureUpdateNotes()
 
 end
 
+local function RaiseUpdateNotesFrame(frame)
+    if not frame then return end
+    local owner = _G.EasyAuctionConfigFrame
+    local ownerLevel = owner and owner.GetFrameLevel and owner:GetFrameLevel() or 0
+    frame:SetFrameStrata("FULLSCREEN_DIALOG")
+    frame:SetFrameLevel(math.max(ownerLevel + 20, 220))
+    frame:SetToplevel(true)
+end
+
 function ShowUpdateNotesPopup()
     if EasyAuctionUpdateNoteFrame then
+        RaiseUpdateNotesFrame(EasyAuctionUpdateNoteFrame)
         EasyAuctionUpdateNoteFrame:Show()
         return
     end
@@ -480,13 +499,15 @@ function ShowUpdateNotesPopup()
     local f = CreateFrame("Frame", "EasyAuctionUpdateNoteFrame", UIParent, "BackdropTemplate")
     f:SetSize(540, 390)
     f:SetPoint("CENTER")
-    f:SetFrameStrata("DIALOG")
-    f:SetToplevel(true)
+    RaiseUpdateNotesFrame(f)
     f:SetMovable(true)
     f:EnableMouse(true)
     f:RegisterForDrag("LeftButton")
     f:SetScript("OnDragStart", f.StartMoving)
     f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:SetScript("OnShow", function(self)
+        RaiseUpdateNotesFrame(self)
+    end)
     EA_ChangelogSkinFrame(f, "window")
 
     local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
