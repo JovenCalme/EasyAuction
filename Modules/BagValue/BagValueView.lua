@@ -9,8 +9,8 @@ View.__index = View
 
 local FRAME_WIDTH, FRAME_HEIGHT = 680, 500
 local ROW_COUNT, ROW_HEIGHT = 10, 27
-local VALUE_FONT_SIZE = 10
-local GOLD_ICON = "|TInterface\\MoneyFrame\\UI-GoldIcon:10:10:0:0|t"
+local VALUE_FONT_SIZE = 12
+local GOLD_ICON = "|TInterface\\MoneyFrame\\UI-GoldIcon:12:12:0:0|t"
 local COLUMN_DEFS = {
     { key = "name", label = "物品", x = 6, width = 246, justify = "LEFT" },
     { key = "count", label = "数量", x = 252, width = 54, justify = "RIGHT" },
@@ -56,7 +56,7 @@ local function rowValue(row, key)
         if row.sourceLabel then return row.sourceLabel end
         local sources = {}
         if (tonumber(row.auctionValue) or 0) > 0 then
-            sources[#sources + 1] = row.freshness == "stale" and "过期扫描价" or "扫描价"
+            sources[#sources + 1] = row.freshness == "stale" and "扫描价" or "扫描价"
         end
         if (tonumber(row.vendorValue) or 0) > 0 then sources[#sources + 1] = "卖店" end
         if (tonumber(row.disenchantValue) or 0) > 0 then sources[#sources + 1] = "分解" end
@@ -127,13 +127,13 @@ local function createSummaryMetric(parent, x, label)
     metric.label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     metric.label:SetPoint("TOPLEFT", parent, "TOPLEFT", x, -7)
     metric.label:SetSize(112, 16)
-    metric.label:SetJustifyH("LEFT")
+    metric.label:SetJustifyH("CENTER")
     metric.label:SetText(label)
     styleText(metric.label, "muted")
     metric.value = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
     metric.value:SetPoint("TOPLEFT", parent, "TOPLEFT", x, -26)
     metric.value:SetSize(112, 20)
-    metric.value:SetJustifyH("RIGHT")
+    metric.value:SetJustifyH("CENTER")
     metric.value:SetFont(_G.STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", VALUE_FONT_SIZE, "")
     if metric.value.SetWordWrap then metric.value:SetWordWrap(false) end
     if metric.value.SetMaxLines then metric.value:SetMaxLines(1) end
