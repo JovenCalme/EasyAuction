@@ -1,4 +1,4 @@
-local ADDON_VERSION = "3.3.4"
+local ADDON_VERSION = "3.3.5"
 local EAStyle = _G.EasyAuctionStyle
 
 local function EA_ChangelogSkinFrame(frame, role)
@@ -70,6 +70,13 @@ local function EA_ChangelogLine(parent, alpha)
 end
 
 local UPDATE_NOTES = {
+    {
+        version = "3.3.5",
+        date = "2026-07-26",
+        note = [[
+- 发件箱新增“记住上个收件人”，发送成功后自动保留名字，连续邮寄更省事。
+]],
+    },
     {
         version = "3.3.4",
         date = "2026-07-26",

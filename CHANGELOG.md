@@ -2,6 +2,10 @@
 
 ## 简体中文
 
+### 3.3.5 (2026-07-26)
+
+- 发件箱新增“记住上个收件人”，发送成功后自动保留名字，连续邮寄更省事
+
 ### 3.3.4 (2026-07-26)
 
 - 新增“闪退”，确认统计后可批量退回当前可退邮件
@@ -87,6 +91,10 @@
 ---
 
 ## English
+
+### 3.3.5 (2026-07-26)
+
+- Added Remember Last Recipient to keep the name after a successful send for faster repeat mailing
 
 ### 3.3.4 (2026-07-26)
 
