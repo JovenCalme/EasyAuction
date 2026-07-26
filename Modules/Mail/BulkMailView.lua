@@ -801,10 +801,10 @@ function BulkMailView:_createHistoryPanel(frame, createFrame)
     panel.detailEmpty:SetPoint("CENTER", panel.detailListFrame, "CENTER", 0, 0)
     panel.detailEmpty:SetText("选择左侧记录查看发送结果")
     panel.batchRows, panel.detailRows = {}, {}
-    for index = 1, 8 do
+    for index = 1, 5 do
         local row = createFrame("Button", nil, panel.batchListFrame, "BackdropTemplate")
-        row:SetSize(242, 29)
-        row:SetPoint("TOPLEFT", panel.batchListFrame, "TOPLEFT", 5, -5 - (index - 1) * 30)
+        row:SetSize(242, 48)
+        row:SetPoint("TOPLEFT", panel.batchListFrame, "TOPLEFT", 5, -5 - (index - 1) * 49)
         if row.SetBackdrop then
             row:SetBackdrop({
                 bgFile = "Interface/Buttons/WHITE8X8",
