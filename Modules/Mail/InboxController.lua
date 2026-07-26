@@ -268,10 +268,8 @@ function Controller:_ensureNativeReturnButton()
     local createFrame = self.deps.createFrame or (_G and _G.CreateFrame)
     if not parent or type(createFrame) ~= "function" then return nil end
     local button = createFrame("Button", nil, parent, "UIPanelButtonTemplate")
-    button:SetSize(72, 24)
-    local openAll = _G and _G.OpenAllMail
-    if openAll then button:SetPoint("LEFT", openAll, "RIGHT", 4, 0)
-    else button:SetPoint("CENTER", parent, "BOTTOM", 65, 114) end
+    button:SetSize(64, 22)
+    button:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -70, -34)
     button:SetText("闪退")
     button:SetScript("OnClick", function() self:RequestReturnAll() end)
     button:Disable()
