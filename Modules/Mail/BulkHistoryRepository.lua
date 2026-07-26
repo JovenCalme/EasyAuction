@@ -33,8 +33,25 @@ local function limited(value, maximum)
     return string.sub(value, 1, index - 1)
 end
 
-local function sanitizeItem(item)
+local function sanitizeAttachment(attachment)
+    if type(attachment) ~= "table" then return nil end
+    local itemID = tonumber(attachment.itemID or attachment.itemId)
+    local name = limited(attachment.name, 128)
+    if not itemID and name == "" then return nil end
+    local texture = attachment.texture or attachment.icon
+    if type(texture) ~= "number" and type(texture) ~= "string" then texture = nil end
+    local quality = tonumber(attachment.quality)
     return {
+        name = name,
+        itemID = itemID and math.max(0, math.floor(itemID)) or nil,
+        texture = type(texture) == "string" and limited(texture, 256) or texture,
+        count = math.max(1, math.floor(tonumber(attachment.count or attachment.stackCount) or 1)),
+        quality = quality and math.max(0, math.floor(quality)) or nil,
+    }
+end
+
+local function sanitizeItem(item)
+    local result = {
         itemId = tostring(item.itemId or item.recipientKey or ""),
         recipientKey = tostring(item.recipientKey or ""),
         displayName = limited(item.displayName or item.sendName, 96),
@@ -48,6 +65,15 @@ local function sanitizeItem(item)
         errorCode = item.errorCode and limited(item.errorCode, 64) or nil,
         errorMessage = item.errorMessage and limited(item.errorMessage, 160) or nil,
     }
+    if type(item.attachments) == "table" then
+        local attachments = {}
+        for index = 1, math.min(#item.attachments, 12) do
+            local attachment = sanitizeAttachment(item.attachments[index])
+            if attachment then attachments[#attachments + 1] = attachment end
+        end
+        if #attachments > 0 then result.attachments = attachments end
+    end
+    return result
 end
 
 local function countStates(record)
@@ -164,6 +190,7 @@ function BulkHistoryRepository:RecordSingle(record)
                 attemptCount = 1,
                 amount = record.amount,
                 postage = record.postage,
+                attachments = record.attachments,
                 startedAt = timestamp,
                 finishedAt = timestamp,
                 errorCode = err and err.code,

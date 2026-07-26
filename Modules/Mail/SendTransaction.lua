@@ -103,6 +103,7 @@ function SendTransaction:_recordHistory(state, err)
         subject = self.draft.subject,
         amount = self.draft.money,
         postage = self.postage,
+        attachments = self.draft.attachments,
         error = err,
     })
 end

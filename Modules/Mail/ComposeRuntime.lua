@@ -1172,6 +1172,7 @@ function ComposeRuntime:_installHooks(recipientBox)
                             subject = snapshot.subject,
                             amount = snapshot.money,
                             postage = compat.GetSendPrice and compat:GetSendPrice() or 0,
+                            attachments = snapshot.attachments,
                         }
                     else
                         self.pendingNativeMail = nil

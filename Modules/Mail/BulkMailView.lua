@@ -92,6 +92,68 @@ local function formatMoney(amount)
     return tostring(amount) .. " 铜"
 end
 
+local function buildHistoryDetails(record)
+    local entries = {}
+    for resultIndex = 1, #(record and record.recipients or {}) do
+        local result = record.recipients[resultIndex]
+        entries[#entries + 1] = { kind = "result", result = result }
+        local attachments = type(result.attachments) == "table" and result.attachments or {}
+        if #attachments > 0 then
+            local total = 0
+            for index = 1, #attachments do
+                total = total + math.max(1, math.floor(tonumber(attachments[index].count) or 1))
+            end
+            entries[#entries + 1] = {
+                kind = "attachmentHeader", types = #attachments, total = total,
+            }
+            for index = 1, #attachments do
+                entries[#entries + 1] = { kind = "attachment", attachment = attachments[index] }
+            end
+        end
+    end
+    return entries
+end
+
+local function layoutHistoryDetailRow(row, kind)
+    row.icon:Hide()
+    row.name:ClearAllPoints()
+    row.status:ClearAllPoints()
+    row.amount:ClearAllPoints()
+    row.postage:ClearAllPoints()
+    row.name:SetJustifyH("LEFT")
+    row.amount:SetJustifyH("RIGHT")
+    row.postage:SetJustifyH("RIGHT")
+    if kind == "attachment" then
+        row.icon:Show()
+        row.name:SetPoint("LEFT", row.icon, "RIGHT", 5, 0)
+        row.name:SetWidth(240)
+        row.status:SetPoint("LEFT", row.name, "RIGHT", 0, 0)
+        row.status:SetWidth(0)
+        row.amount:SetPoint("RIGHT", row, "RIGHT", -76, 0)
+        row.amount:SetWidth(100)
+        row.postage:SetPoint("RIGHT", row, "RIGHT", -4, 0)
+        row.postage:SetWidth(68)
+    elseif kind == "attachmentHeader" then
+        row.name:SetPoint("LEFT", row, "LEFT", 6, 0)
+        row.name:SetWidth(466)
+        row.status:SetPoint("LEFT", row.name, "RIGHT", 0, 0)
+        row.status:SetWidth(0)
+        row.amount:SetPoint("LEFT", row.name, "RIGHT", 0, 0)
+        row.amount:SetWidth(0)
+        row.postage:SetPoint("LEFT", row.amount, "RIGHT", 0, 0)
+        row.postage:SetWidth(0)
+    else
+        row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
+        row.name:SetWidth(170)
+        row.status:SetPoint("LEFT", row.name, "RIGHT", 4, 0)
+        row.status:SetWidth(68)
+        row.amount:SetPoint("LEFT", row.status, "RIGHT", 4, 0)
+        row.amount:SetWidth(132)
+        row.postage:SetPoint("LEFT", row.amount, "RIGHT", 4, 0)
+        row.postage:SetWidth(86)
+    end
+end
+
 local function ensureBulkConfirmRows(popup)
     if popup.easyAuctionBulkRows then return popup.easyAuctionBulkRows end
     local rows = {}
@@ -771,10 +833,10 @@ function BulkMailView:_createHistoryPanel(frame, createFrame)
         end)
         panel.batchRows[index] = row
     end
-    for index = 1, 12 do
+    for index = 1, 14 do
         local row = createFrame("Button", nil, panel.detailListFrame, "BackdropTemplate")
-        row:SetSize(478, 18)
-        row:SetPoint("TOPLEFT", panel.detailListFrame, "TOPLEFT", 5, -5 - (index - 1) * 19)
+        row:SetSize(478, 16)
+        row:SetPoint("TOPLEFT", panel.detailListFrame, "TOPLEFT", 5, -5 - (index - 1) * 17)
         if row.SetBackdrop then
             row:SetBackdrop({
                 bgFile = "Interface/Buttons/WHITE8X8",
@@ -800,8 +862,20 @@ function BulkMailView:_createHistoryPanel(frame, createFrame)
         row.postage:SetPoint("LEFT", row.amount, "RIGHT", 4, 0)
         row.postage:SetWidth(86)
         row.postage:SetJustifyH("RIGHT")
+        row.icon = row:CreateTexture(nil, "ARTWORK")
+        row.icon:SetSize(14, 14)
+        row.icon:SetPoint("LEFT", row, "LEFT", 4, 0)
+        row.icon:Hide()
         row:SetScript("OnEnter", function()
-            if row.result and _G.GameTooltip then
+            if row.attachment and _G.GameTooltip then
+                _G.GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
+                _G.GameTooltip:SetText(row.attachment.name or "邮件附件")
+                if row.attachment.itemID then
+                    _G.GameTooltip:AddLine("itemID：" .. row.attachment.itemID, 0.75, 0.75, 0.75)
+                end
+                _G.GameTooltip:AddLine("数量：" .. (row.attachment.count or 1), 1, 1, 1)
+                _G.GameTooltip:Show()
+            elseif row.result and _G.GameTooltip then
                 _G.GameTooltip:SetOwner(row, "ANCHOR_RIGHT")
                 _G.GameTooltip:SetText(row.result.displayName or row.result.sendName or "")
                 _G.GameTooltip:AddLine(STATUS_TEXT[row.result.state] or row.result.state or "", 1, 1, 1)
@@ -879,27 +953,56 @@ function BulkMailView:RefreshHistory()
             row:Hide()
         end
     end
-    local results = selected and selected.recipients or {}
+    local details = buildHistoryDetails(selected)
     self.frame.historyPanel.detailEmpty:SetText(selected and "该记录暂无发送结果"
         or "选择左侧记录查看发送结果")
-    self.frame.historyPanel.detailEmpty:SetShown(#results == 0)
+    self.frame.historyPanel.detailEmpty:SetShown(#details == 0)
     local retryable = selected and selected.sourceKind ~= "single"
         and (tonumber(selected.failedCount) or 0) > 0
     if retryable then self.frame.historyPanel.retry:Enable()
     else self.frame.historyPanel.retry:Disable() end
     for index = 1, #self.frame.historyPanel.detailRows do
-        local row, result = self.frame.historyPanel.detailRows[index], results[self.historyDetailOffset + index]
-        if result then
+        local row, entry = self.frame.historyPanel.detailRows[index], details[self.historyDetailOffset + index]
+        if entry then
+            local result = entry.result
+            local attachment = entry.attachment
             row.result = result
+            row.attachment = attachment
             row:Show()
-            row.name:SetText(truncateUTF8(result.displayName or result.sendName, 18))
-            row.status:SetText(STATUS_TEXT[result.state] or result.state or "")
-            local statusColor = STATUS_COLOR[result.state]
-            if statusColor then row.status:SetTextColor(statusColor[1], statusColor[2], statusColor[3]) end
-            row.amount:SetText(formatMoney(result.amount or 0))
-            row.postage:SetText(result.postage ~= nil and ("邮资" .. formatMoney(result.postage)) or "邮资-")
+            layoutHistoryDetailRow(row, entry.kind)
+            row.status:SetTextColor(1, 1, 1)
+            if result then
+                row.name:SetTextColor(1, 1, 1)
+                row.name:SetText(truncateUTF8(result.displayName or result.sendName, 18))
+                row.status:SetText(STATUS_TEXT[result.state] or result.state or "")
+                local statusColor = STATUS_COLOR[result.state]
+                if statusColor then row.status:SetTextColor(statusColor[1], statusColor[2], statusColor[3]) end
+                row.amount:SetText(formatMoney(result.amount or 0))
+                row.postage:SetText(result.postage ~= nil and ("邮资" .. formatMoney(result.postage)) or "邮资-")
+                if row.SetBackdropColor then row:SetBackdropColor(0.04, 0.04, 0.04, 0.55) end
+            elseif attachment then
+                local quality = _G.ITEM_QUALITY_COLORS and _G.ITEM_QUALITY_COLORS[attachment.quality]
+                if quality then row.name:SetTextColor(quality.r, quality.g, quality.b)
+                else row.name:SetTextColor(1, 1, 1) end
+                row.icon:SetTexture(attachment.texture or "Interface/Icons/INV_Misc_QuestionMark")
+                row.name:SetText(truncateUTF8(attachment.name ~= "" and attachment.name
+                    or ("物品 " .. tostring(attachment.itemID or "未知")), 24))
+                row.status:SetText("")
+                row.amount:SetText(attachment.itemID and ("itemID " .. attachment.itemID) or "itemID -")
+                row.postage:SetText("× " .. math.max(1, math.floor(tonumber(attachment.count) or 1)))
+                if row.SetBackdropColor then row:SetBackdropColor(0.025, 0.025, 0.025, 0.45) end
+            else
+                row.name:SetTextColor(1, 0.82, 0)
+                row.name:SetText(string.format("物品清单（%d 种 / %d 件）", entry.types, entry.total))
+                row.status:SetText("")
+                row.amount:SetText("")
+                row.postage:SetText("")
+                if row.SetBackdropColor then row:SetBackdropColor(0.10, 0.075, 0.02, 0.72) end
+            end
         else
             row.result = nil
+            row.attachment = nil
+            layoutHistoryDetailRow(row, "result")
             row.name:SetText("")
             row.status:SetText("")
             row.amount:SetText("")
@@ -907,7 +1010,7 @@ function BulkMailView:RefreshHistory()
             row:Hide()
         end
     end
-    self.frame.historyPanel.detailCount = #results
+    self.frame.historyPanel.detailCount = #details
 end
 
 function BulkMailView:_refreshGroupMenu()
