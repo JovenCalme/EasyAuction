@@ -95,15 +95,27 @@ local function summarizeReturnability(entry)
     for index = 1, #entry.sources do
         local source = entry.sources[index]
         local key = sourceMailIdentity(source, index)
-        local canReturn = source.canReturn == true
-        if byMail[key] == nil or not canReturn then byMail[key] = canReturn end
+        local state = byMail[key]
+        if not state then
+            state = { canReturn = source.canReturn == true, wasReturned = source.wasReturned == true }
+            byMail[key] = state
+        else
+            state.canReturn = state.canReturn and source.canReturn == true
+            state.wasReturned = state.wasReturned or source.wasReturned == true
+        end
     end
-    local returnable, nonReturnable = 0, 0
-    for _, canReturn in pairs(byMail) do
-        if canReturn then returnable = returnable + 1 else nonReturnable = nonReturnable + 1 end
+    local returnable, nonReturnable, forwardRequired = 0, 0, 0
+    for _, state in pairs(byMail) do
+        if state.canReturn then
+            returnable = returnable + 1
+        else
+            nonReturnable = nonReturnable + 1
+            if state.wasReturned then forwardRequired = forwardRequired + 1 end
+        end
     end
     entry.returnableMailCount = returnable
     entry.nonReturnableMailCount = nonReturnable
+    entry.forwardRequiredMailCount = forwardRequired
 end
 
 local function matchesCategory(attachment, categoryId, registry)

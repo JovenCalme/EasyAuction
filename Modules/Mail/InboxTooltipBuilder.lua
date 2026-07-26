@@ -56,15 +56,26 @@ local function summarizeSourceMails(sources)
         else
             key = "source:" .. tostring(index)
         end
-        local canReturn = source.canReturn == true
-        if states[key] == nil or not canReturn then states[key] = canReturn end
+        local state = states[key]
+        if not state then
+            state = { canReturn = source.canReturn == true, wasReturned = source.wasReturned == true }
+            states[key] = state
+        else
+            state.canReturn = state.canReturn and source.canReturn == true
+            state.wasReturned = state.wasReturned or source.wasReturned == true
+        end
     end
-    local count, returnable, nonReturnable = 0, 0, 0
-    for _, canReturn in pairs(states) do
+    local count, returnable, nonReturnable, forwardRequired = 0, 0, 0, 0
+    for _, state in pairs(states) do
         count = count + 1
-        if canReturn then returnable = returnable + 1 else nonReturnable = nonReturnable + 1 end
+        if state.canReturn then
+            returnable = returnable + 1
+        else
+            nonReturnable = nonReturnable + 1
+            if state.wasReturned then forwardRequired = forwardRequired + 1 end
+        end
     end
-    return count, returnable, nonReturnable
+    return count, returnable, nonReturnable, forwardRequired
 end
 
 function TooltipBuilder.Build(entry, options)
@@ -73,7 +84,8 @@ function TooltipBuilder.Build(entry, options)
     local formatMoney = options.formatMoney or defaultMoney
     local formatDuration = options.formatDuration or defaultDuration
     local sources = entry.sources or {}
-    local sourceCount, returnableMailCount, nonReturnableMailCount = summarizeSourceMails(sources)
+    local sourceCount, returnableMailCount, nonReturnableMailCount,
+        forwardRequiredMailCount = summarizeSourceMails(sources)
     local model = {
         kind = entry.kind,
         title = entry.displayName or (entry.kind == "money" and "金币" or "未知物品"),
@@ -82,6 +94,7 @@ function TooltipBuilder.Build(entry, options)
         sourceCount = sourceCount,
         returnableMailCount = returnableMailCount,
         nonReturnableMailCount = nonReturnableMailCount,
+        forwardRequiredMailCount = forwardRequiredMailCount,
     }
     local firstSource = sources[1]
     if firstSource then
@@ -104,9 +117,9 @@ function TooltipBuilder.Build(entry, options)
         if daysLeft and (not earliest or daysLeft < earliest) then earliest = daysLeft end
     end
     if earliest then append(model.lines, "最早到期：" .. formatDuration(earliest)) end
-    if nonReturnableMailCount > 0 then
+    if forwardRequiredMailCount > 0 then
         append(model.lines, string.format("退信状态：可退 %d 封，需转寄 %d 封",
-            returnableMailCount, nonReturnableMailCount), { 1, 0.25, 0.25 })
+            returnableMailCount, forwardRequiredMailCount), { 1, 0.25, 0.25 })
     elseif returnableMailCount > 0 then
         append(model.lines, string.format("退信状态：%d 封均可退信",
             returnableMailCount), { 0.2, 1, 0.2 })

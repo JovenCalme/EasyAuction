@@ -42,7 +42,9 @@ local function entryModel(entry, visibleSet, options)
         and type(entry.quality) == "number" and entry.quality ~= 1
     local returnableMailCount = math.max(0, tonumber(entry.returnableMailCount) or 0)
     local nonReturnableMailCount = math.max(0, tonumber(entry.nonReturnableMailCount) or 0)
-    local returnState = nonReturnableMailCount > 0 and "action-required"
+    local forwardRequiredMailCount = math.max(0,
+        tonumber(entry.forwardRequiredMailCount) or 0)
+    local returnState = forwardRequiredMailCount > 0 and "action-required"
         or returnableMailCount > 0 and "returnable" or nil
     return {
         entry = entry,
@@ -58,6 +60,7 @@ local function entryModel(entry, visibleSet, options)
         sources = entry.sources,
         returnableMailCount = returnableMailCount,
         nonReturnableMailCount = nonReturnableMailCount,
+        forwardRequiredMailCount = forwardRequiredMailCount,
         returnState = returnState,
         expiryState = expiryState(entry.minDaysLeft),
         showQuality = showQuality,
@@ -78,6 +81,7 @@ local function emptyModel(cellIndex)
         totalMoney = 0,
         returnableMailCount = 0,
         nonReturnableMailCount = 0,
+        forwardRequiredMailCount = 0,
         returnState = nil,
         expiryState = nil,
         showQuality = false,

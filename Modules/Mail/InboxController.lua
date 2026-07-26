@@ -316,7 +316,7 @@ function Controller:RefreshNativeInboxLabels()
         local hasMail = header and (tostring(header.sender or "") ~= ""
             or tostring(header.subject or "") ~= "" or header.packageIcon ~= nil
             or (tonumber(header.money) or 0) > 0 or (tonumber(header.itemCount) or 0) > 0)
-        if label and hasMail then
+        if label and hasMail and (header.canReturn == true or header.wasReturned == true) then
             if header.canReturn == true then
                 label:SetText("可退")
                 label:SetTextColor(0.2, 1, 0.2)
