@@ -5568,6 +5568,25 @@ function CreateAuctionSide()
     itemsTitle:SetFont(STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 14, "")
     EA_SkinText(itemsTitle, "accent")
 
+    local bagValueBtn = CreateFrame("Button", nil, itemsFrame, "UIPanelButtonTemplate")
+    bagValueBtn:SetSize(82, 22)
+    bagValueBtn:SetPoint("TOPRIGHT", itemsFrame, "TOPRIGHT", -8, -6)
+    bagValueBtn:SetText("背包估值")
+    EA_SkinButton(bagValueBtn)
+    bagValueBtn:SetScript("OnClick", function()
+        if type(_G.EasyAuction_ToggleBagValueFrame) == "function" then
+            _G.EasyAuction_ToggleBagValueFrame()
+        end
+    end)
+    bagValueBtn:SetScript("OnEnter", function(self)
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+        GameTooltip:SetText("背包估值", 1, 0.82, 0)
+        GameTooltip:AddLine("汇总当前背包的拍卖、卖店与分解价值。", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    bagValueBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    itemsFrame.EABagValueButton = bagValueBtn
+
     local itemsScroll = CreateFrame("ScrollFrame", nil, itemsFrame, "UIPanelScrollFrameTemplate")
     itemsScroll:SetPoint("TOPLEFT", itemsFrame, "TOPLEFT", 8, -34)
     itemsScroll:SetPoint("BOTTOMRIGHT", itemsFrame, "BOTTOMRIGHT", -24, 8)

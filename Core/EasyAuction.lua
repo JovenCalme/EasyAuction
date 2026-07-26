@@ -3267,50 +3267,16 @@ local searchEditBox
 local EA_LayoutDBFrameControls
 local resetBtn
 local opportunityBtn
-local DB_SEARCH_LEFT = 288
-local DB_SEARCH_COMPACT_LEFT = 200
-local DB_SEARCH_MIN_WIDTH = 150
-local DB_SEARCH_FALLBACK_WIDTH = 220
-
-local function EA_GetRelativeLeft(frame, parent)
-    if not frame or not parent or not frame.GetLeft or not parent.GetLeft then return nil end
-    if frame.IsShown and not frame:IsShown() then return nil end
-    local left = frame:GetLeft()
-    local parentLeft = parent:GetLeft()
-    if not left or not parentLeft then return nil end
-    return left - parentLeft
-end
-
-local function EA_GetDBTopButtonLeftEdge()
-    local leftEdge
-    local buttons = {
-        resetBtn,
-        DBFrame and DBFrame.EA_CategoryManageBtn,
-        opportunityBtn,
-        DBFrame and DBFrame.EA_ExportBtn,
-        DBFrame and DBFrame.EasyAuctionProStrategyButton,
-        DBFrame and DBFrame.EasyAuctionBagValueButton,
-    }
-    for _, button in ipairs(buttons) do
-        local left = EA_GetRelativeLeft(button, DBFrame)
-        if left and (not leftEdge or left < leftEdge) then
-            leftEdge = left
-        end
-    end
-    return leftEdge
-end
+local DB_TITLE_WIDTH = 340
+local DB_SEARCH_LEFT = 18
+local DB_SEARCH_TOP = -40
+local DB_SEARCH_WIDTH = 360
 
 local function EA_LayoutDBSearchBox()
     if not searchEditBox or not DBFrame then return end
-    local searchLeft = DBFrame.EasyAuctionBagValueButton and DB_SEARCH_COMPACT_LEFT or DB_SEARCH_LEFT
-    local width = DB_SEARCH_FALLBACK_WIDTH
-    local buttonLeft = EA_GetDBTopButtonLeftEdge()
-    if buttonLeft then
-        width = math.max(DB_SEARCH_MIN_WIDTH, buttonLeft - searchLeft - 10)
-    end
     searchEditBox:ClearAllPoints()
-    searchEditBox:SetPoint("TOPLEFT", DBFrame, "TOPLEFT", searchLeft, -14)
-    searchEditBox:SetSize(width, 22)
+    searchEditBox:SetPoint("TOPLEFT", DBFrame, "TOPLEFT", DB_SEARCH_LEFT, DB_SEARCH_TOP)
+    searchEditBox:SetSize(DB_SEARCH_WIDTH, 22)
     searchEditBox:SetFrameLevel(DBFrame:GetFrameLevel() + 20)
 end
 
@@ -3445,7 +3411,7 @@ EA_LayoutDBFrameControls = function()
     if title then
         title:ClearAllPoints()
         title:SetPoint("TOPLEFT", DBFrame, "TOPLEFT", 14, -14)
-        title:SetWidth(DBFrame.EasyAuctionBagValueButton and (DB_SEARCH_COMPACT_LEFT - 28) or 260)
+        title:SetWidth(DB_TITLE_WIDTH)
         title:SetJustifyH("LEFT")
         title:SetWordWrap(false)
     end
@@ -3604,9 +3570,9 @@ local function EasyAuction_CreateDBSearchBox()
     if not DBFrame or searchEditBox then return end
 
     searchEditBox = CreateFrame("EditBox", "EasyAuctionDBSearchBox", DBFrame, "InputBoxTemplate")
-    searchEditBox:SetSize(DB_SEARCH_FALLBACK_WIDTH, 22)
+    searchEditBox:SetSize(DB_SEARCH_WIDTH, 22)
     searchEditBox:SetAutoFocus(false)
-    searchEditBox:SetPoint("TOPLEFT", DBFrame, "TOPLEFT", DB_SEARCH_LEFT, -14)
+    searchEditBox:SetPoint("TOPLEFT", DBFrame, "TOPLEFT", DB_SEARCH_LEFT, DB_SEARCH_TOP)
     searchEditBox:SetFontObject(ChatFontNormal)
     searchEditBox:SetTextInsets(8, 8, 0, 0)
     searchEditBox:SetMaxLetters(60)

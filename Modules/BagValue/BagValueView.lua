@@ -34,6 +34,11 @@ local function formatMoney(value)
     return tostring(value) .. " 铜"
 end
 
+local function formatGold(value)
+    value = math.max(0, tonumber(value) or 0)
+    return string.format("%.2f 金币", value / 10000)
+end
+
 local function rowValue(row, key)
     if key == "name" then return row.name or row.itemName or row.itemLink or "" end
     if key == "count" then return tonumber(row.count or row.quantity or row.stackCount) or 0 end
@@ -348,8 +353,8 @@ function View:_refreshRows()
                 frame.name:SetText(rowValue(row, "name"))
                 frame.name:SetTextColor(qualityColor(row.quality))
                 frame.count:SetText(tostring(rowValue(row, "count")))
-                frame.unitValue:SetText(formatMoney(rowValue(row, "unitValue")))
-                frame.totalValue:SetText(formatMoney(rowValue(row, "totalValue")))
+                frame.unitValue:SetText(formatGold(rowValue(row, "unitValue")))
+                frame.totalValue:SetText(formatGold(rowValue(row, "totalValue")))
                 frame.source:SetText(tostring(rowValue(row, "source")))
                 if style and type(style.RowColor) == "function" then
                     style:RowColor(frame.background, self.rowOffset + poolIndex, false)
