@@ -851,6 +851,9 @@ function BulkMailView:_createHistoryPanel(frame, createFrame)
         row.time:SetPoint("LEFT", row, "LEFT", 8, 0)
         row.time:SetWidth(76)
         row.time:SetJustifyH("LEFT")
+        row.time:SetFont(_G.STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", 9, "")
+        if row.time.SetWordWrap then row.time:SetWordWrap(false) end
+        if row.time.SetMaxLines then row.time:SetMaxLines(1) end
         row.source = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         row.source:SetPoint("LEFT", row.time, "RIGHT", 8, 0)
         row.source:SetWidth(54)

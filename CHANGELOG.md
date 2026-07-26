@@ -11,6 +11,7 @@
 - 邮寄记录现在会保存普通和批量邮件，金额与邮资改用金银铜图标显示
 - 带附件的邮寄记录新增简洁物品清单，清楚显示图标、名称和数量
 - 邮寄记录改为清晰表格布局，可按时间、类型、人数和结果快速浏览
+- 邮寄时间改用更小的单行字体，日期和时刻不再换行
 
 ### 3.3.4 (2026-07-26)
 
@@ -107,6 +108,7 @@
 - Mail history now includes regular and bulk mail, with coin icons for amounts and postage
 - Mail records with attachments now show a clean list of item icons, names, and quantities
 - Redesigned mail history as a clear table for faster scanning by time, type, count, and result
+- Reduced mail timestamp size and kept it on one line
 
 ### 3.3.4 (2026-07-26)
 
