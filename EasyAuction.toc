@@ -67,4 +67,5 @@ Modules/BagValue/BagValuePriceProvider.lua
 Modules/BagValue/BagValueEstimator.lua
 Modules/BagValue/BagValueView.lua
 Modules/BagValue/BagValueController.lua
+Modules/BagValue/BagValueTooltip.lua
 Modules/BagValue/BagValueBootstrap.lua

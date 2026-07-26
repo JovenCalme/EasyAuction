@@ -5579,12 +5579,15 @@ function CreateAuctionSide()
         end
     end)
     bagValueBtn:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-        GameTooltip:SetText("背包估值", 1, 0.82, 0)
-        GameTooltip:AddLine("汇总当前背包的拍卖、卖店与分解价值。", 1, 1, 1, true)
-        GameTooltip:Show()
+        if type(_G.EasyAuction_ShowBagValueTooltip) == "function" then
+            _G.EasyAuction_ShowBagValueTooltip(self)
+        end
     end)
-    bagValueBtn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    bagValueBtn:SetScript("OnLeave", function()
+        if type(_G.EasyAuction_HideBagValueTooltip) == "function" then
+            _G.EasyAuction_HideBagValueTooltip()
+        end
+    end)
     itemsFrame.EABagValueButton = bagValueBtn
 
     local itemsScroll = CreateFrame("ScrollFrame", nil, itemsFrame, "UIPanelScrollFrameTemplate")

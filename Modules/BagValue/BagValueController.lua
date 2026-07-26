@@ -33,7 +33,7 @@ function Controller:_after(delay, callback)
     return callback()
 end
 
-function Controller:_ensureServices()
+function Controller:_ensureDataServices()
     if not self.scanner then
         self.scanner = instantiate(self.deps.scanner or BagValue.Scanner
             or BagValue.BagInventoryScanner, self.deps.scannerDeps)
@@ -47,6 +47,18 @@ function Controller:_ensureServices()
         self.estimator = instantiate(self.deps.estimator or BagValue.Estimator
             or BagValue.BagValueEstimator, estimatorDeps)
     end
+    if not self.scanner or type(self.scanner.Scan) ~= "function" then
+        return nil, "背包扫描服务尚未加载。"
+    end
+    if not self.estimator or type(self.estimator.Estimate) ~= "function" then
+        return nil, "估值服务尚未加载。"
+    end
+    return true
+end
+
+function Controller:_ensureServices()
+    local ready, err = self:_ensureDataServices()
+    if not ready then return nil, err end
     if not self.view then
         self.view = self.deps.view
         if not self.view and BagValue.View and type(BagValue.View.New) == "function" then
@@ -57,17 +69,46 @@ function Controller:_ensureServices()
             })
         end
     end
-    if not self.scanner or type(self.scanner.Scan) ~= "function" then
-        return nil, "背包扫描服务尚未加载。"
-    end
-    if not self.estimator or type(self.estimator.Estimate) ~= "function" then
-        return nil, "估值服务尚未加载。"
-    end
     if not self.view then return nil, "背包估值窗口尚未加载。" end
     if type(self.view.Create) == "function" and not (self.view.frame or self.view.root) then
         self.view:Create(self.deps.parent or (_G and _G.UIParent))
     end
     return true
+end
+
+function Controller:_calculate()
+    local scanOK, snapshot, scanError = pcall(self.scanner.Scan, self.scanner)
+    if not scanOK then return nil, snapshot end
+    if not snapshot then return nil, scanError or "读取背包失败，请稍后重试。" end
+    if snapshot.error then return nil, snapshot.error end
+
+    local estimateOK, result, estimateError = pcall(self.estimator.Estimate,
+        self.estimator, snapshot, self.deps.options or {})
+    if not estimateOK then return nil, result end
+    if not result then return nil, estimateError or "计算背包估值失败。" end
+
+    if not result.summary then
+        result = { summary = result, rows = result.rows or result.items or snapshot.items or {} }
+    elseif not result.rows then
+        result.rows = result.summary.items or snapshot.items or {}
+    end
+    result.summary.pendingCount = tonumber(result.summary.pendingCount)
+        or tonumber(snapshot.pendingCount) or 0
+    self.snapshot, self.result = snapshot, result
+    self.dirty = false
+    return result
+end
+
+function Controller:GetTooltipResult()
+    if not self.dirty and self.result then return self.result end
+    if self.refreshing then return self.result end
+    local ready, err = self:_ensureDataServices()
+    if not ready then return nil, err end
+    self.refreshing = true
+    local result, calculateError = self:_calculate()
+    self.refreshing = false
+    if not result then self.dirty = true end
+    return result, calculateError
 end
 
 function Controller:IsShown()
@@ -138,50 +179,14 @@ function Controller:RefreshNow(reason)
     self.refreshing = true
     self.dirty = false
     if type(self.view.SetBusy) == "function" then self.view:SetBusy(true) end
-
-    local scanOK, snapshot, scanError = pcall(self.scanner.Scan, self.scanner)
-    if not scanOK then scanError, snapshot = snapshot, nil end
-    if not snapshot then
-        self.refreshing = false
-        self.dirty = true
-        if type(self.view.SetBusy) == "function" then self.view:SetBusy(false) end
-        if type(self.view.ShowError) == "function" then
-            self.view:ShowError(scanError or "读取背包失败，请稍后重试。")
-        end
-        return nil, scanError
-    end
-    if snapshot.error then
-        self.refreshing = false
-        self.dirty = true
-        if type(self.view.SetBusy) == "function" then self.view:SetBusy(false) end
-        if type(self.view.ShowError) == "function" then self.view:ShowError(snapshot.error) end
-        return nil, snapshot.error
-    end
-
-    local options = self.deps.options or {}
-    local estimateOK, result, estimateError = pcall(self.estimator.Estimate,
-        self.estimator, snapshot, options)
-    if not estimateOK then estimateError, result = result, nil end
-    if not result then
-        self.refreshing = false
-        self.dirty = true
-        if type(self.view.SetBusy) == "function" then self.view:SetBusy(false) end
-        if type(self.view.ShowError) == "function" then
-            self.view:ShowError(estimateError or "计算背包估值失败。")
-        end
-        return nil, estimateError
-    end
-
-    if not result.summary then
-        result = { summary = result, rows = result.rows or result.items or snapshot.items or {} }
-    elseif not result.rows then
-        result.rows = result.summary.items or snapshot.items or {}
-    end
-    result.summary.pendingCount = tonumber(result.summary.pendingCount)
-        or tonumber(snapshot.pendingCount) or 0
-    self.snapshot, self.result = snapshot, result
+    local result, calculateError = self:_calculate()
     self.refreshing = false
     if type(self.view.SetBusy) == "function" then self.view:SetBusy(false) end
+    if not result then
+        self.dirty = true
+        if type(self.view.ShowError) == "function" then self.view:ShowError(calculateError) end
+        return nil, calculateError
+    end
     if type(self.view.ShowError) == "function" then self.view:ShowError(nil) end
     if type(self.view.Render) == "function" then self.view:Render(result) end
     self.lastRefreshReason = reason

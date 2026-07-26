@@ -38,6 +38,34 @@ function Bootstrap:Toggle()
     return controller:Toggle()
 end
 
+function Bootstrap:_tooltip()
+    if self.tooltipPresenter then return self.tooltipPresenter end
+    self.tooltipPresenter = self.deps.tooltipPresenter
+    if not self.tooltipPresenter and BagValue.Tooltip and type(BagValue.Tooltip.New) == "function" then
+        self.tooltipPresenter = BagValue.Tooltip.New({ controller = self:_controller() })
+    end
+    return self.tooltipPresenter
+end
+
+function Bootstrap:ShowTooltip(owner)
+    local presenter = self:_tooltip()
+    if presenter and type(presenter.Show) == "function" then return presenter:Show(owner) end
+    return false
+end
+
+function Bootstrap:HideTooltip()
+    local presenter = self:_tooltip()
+    if presenter and type(presenter.Hide) == "function" then presenter:Hide() end
+end
+
+function Bootstrap:_bindValuationButton(button)
+    if not button then return false end
+    button:SetScript("OnClick", function() self:Toggle() end)
+    button:SetScript("OnEnter", function(target) self:ShowTooltip(target) end)
+    button:SetScript("OnLeave", function() self:HideTooltip() end)
+    return true
+end
+
 function Bootstrap:_layoutPriceDBButton()
     local dbFrame = _G and _G.EasyAuctionDBFrame
     local button = self.priceDBButton
@@ -69,21 +97,55 @@ function Bootstrap:_createPriceDBButton()
     button:SetText("背包估值")
     local style = _G.EasyAuctionStyle
     if style and type(style.SkinButton) == "function" then style:SkinButton(button) end
-    button:SetScript("OnClick", function() self:Toggle() end)
-    button:SetScript("OnEnter", function(target)
-        if not _G.GameTooltip then return end
-        _G.GameTooltip:SetOwner(target, "ANCHOR_RIGHT")
-        _G.GameTooltip:SetText("背包估值", 1, 0.82, 0)
-        _G.GameTooltip:AddLine("按 EasyAuction 价格库估算当前背包物品价值。", 1, 1, 1, true)
-        _G.GameTooltip:Show()
-    end)
-    button:SetScript("OnLeave", function()
-        if _G.GameTooltip then _G.GameTooltip:Hide() end
-    end)
+    self:_bindValuationButton(button)
     dbFrame.EasyAuctionBagValueButton = button
     self.priceDBButton = button
     dbFrame:HookScript("OnShow", function() self:_layoutPriceDBButton() end)
     return self:_layoutPriceDBButton()
+end
+
+function Bootstrap:_updateNativeBagButton(frame, bagID)
+    if not frame then return false end
+    local button = frame.EasyAuctionBagValueButton
+    if not button and bagID ~= 0 then return false end
+    if not button then
+        local create = self.deps.createFrame or (_G and _G.CreateFrame)
+        if type(create) ~= "function" then return false end
+        button = create("Button", nil, frame)
+        button:SetSize(20, 20)
+        button:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -34, -5)
+        if button.SetFrameLevel and frame.GetFrameLevel then
+            button:SetFrameLevel(frame:GetFrameLevel() + 10)
+        end
+        button.icon = button:CreateTexture(nil, "ARTWORK")
+        button.icon:SetAllPoints()
+        button.icon:SetTexture("Interface\\Icons\\INV_Misc_Coin_01")
+        if button.icon.SetTexCoord then button.icon:SetTexCoord(0.08, 0.92, 0.08, 0.92) end
+        button:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+        self:_bindValuationButton(button)
+        frame.EasyAuctionBagValueButton = button
+    end
+    button:SetShown(bagID == 0)
+    return bagID == 0
+end
+
+function Bootstrap:_hookNativeBagButton()
+    if self.nativeBagHooked then return true end
+    local hook = self.deps.hooksecurefunc or (_G and _G.hooksecurefunc)
+    if type(hook) == "function" and type(_G.ContainerFrame_GenerateFrame) == "function" then
+        hook("ContainerFrame_GenerateFrame", function(frame, _, bagID)
+            self:_updateNativeBagButton(frame, bagID)
+        end)
+        self.nativeBagHooked = true
+    end
+    local frameCount = tonumber(_G.NUM_CONTAINER_FRAMES) or 13
+    for index = 1, frameCount do
+        local frame = _G["ContainerFrame" .. index]
+        if frame and type(frame.GetID) == "function" then
+            self:_updateNativeBagButton(frame, frame:GetID())
+        end
+    end
+    return self.nativeBagHooked == true
 end
 
 function Bootstrap:Initialize()
@@ -103,10 +165,13 @@ function Bootstrap:Initialize()
     end
 
     _G.EasyAuction_ToggleBagValueFrame = function() return self:Toggle() end
+    _G.EasyAuction_ShowBagValueTooltip = function(owner) return self:ShowTooltip(owner) end
+    _G.EasyAuction_HideBagValueTooltip = function() return self:HideTooltip() end
     _G.SLASH_EASYAUCTIONBAGVALUE1 = "/eabv"
     _G.SlashCmdList = _G.SlashCmdList or {}
     _G.SlashCmdList.EASYAUCTIONBAGVALUE = function() self:Toggle() end
     self:_createPriceDBButton()
+    self:_hookNativeBagButton()
     return true
 end
 
