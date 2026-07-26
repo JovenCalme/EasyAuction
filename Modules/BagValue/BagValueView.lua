@@ -40,21 +40,19 @@ local function rowValue(row, key)
     if key == "unitValue" then
         if (tonumber(row.auctionValue) or 0) > 0 then return tonumber(row.auctionUnit) or 0 end
         if (tonumber(row.vendorValue) or 0) > 0 then return tonumber(row.vendorUnit) or 0 end
+        if (tonumber(row.disenchantValue) or 0) > 0 then return tonumber(row.disenchantUnit) or 0 end
         return tonumber(row.unitValue or row.unitPrice or row.price) or 0
     end
     if key == "totalValue" then return tonumber(row.totalValue or row.value or row.subtotal) or 0 end
     if key == "source" then
         if row.sourceLabel then return row.sourceLabel end
-        local hasAuction = (tonumber(row.auctionValue) or 0) > 0
-        local hasVendor = (tonumber(row.vendorValue) or 0) > 0
-        if hasAuction and hasVendor then
-            return row.freshness == "stale" and "过期价+卖店" or "扫描价+卖店"
+        local sources = {}
+        if (tonumber(row.auctionValue) or 0) > 0 then
+            sources[#sources + 1] = row.freshness == "stale" and "过期扫描价" or "扫描价"
         end
-        if hasAuction then
-            if row.freshness == "stale" then return "过期扫描价" end
-            return "扫描价"
-        end
-        if hasVendor then return "卖店" end
+        if (tonumber(row.vendorValue) or 0) > 0 then sources[#sources + 1] = "卖店" end
+        if (tonumber(row.disenchantValue) or 0) > 0 then sources[#sources + 1] = "分解" end
+        if #sources > 0 then return table.concat(sources, "+") end
         return row.source or row.priceSource or "无价格"
     end
     return row[key]
@@ -239,7 +237,7 @@ function View:Create(parent)
         total = createSummaryMetric(frame.summaryBand, 8, "总估值"),
         auction = createSummaryMetric(frame.summaryBand, 138, "拍卖估值"),
         vendor = createSummaryMetric(frame.summaryBand, 268, "卖店价值"),
-        priced = createSummaryMetric(frame.summaryBand, 398, "已估价"),
+        disenchant = createSummaryMetric(frame.summaryBand, 398, "分解估值"),
         unpriced = createSummaryMetric(frame.summaryBand, 528, "无价格"),
     }
 
@@ -392,7 +390,8 @@ function View:Render(result, rows)
         cards.total.value:SetText(formatMoney(self.summary.totalValue or self.summary.total))
         cards.auction.value:SetText(formatMoney(self.summary.auctionValue or self.summary.auction))
         cards.vendor.value:SetText(formatMoney(self.summary.vendorValue or self.summary.vendor))
-        cards.priced.value:SetText(tostring(math.max(0, tonumber(self.summary.pricedCount) or 0)) .. " 项")
+        cards.disenchant.value:SetText(formatMoney(
+            self.summary.disenchantValue or self.summary.disenchant))
         cards.unpriced.value:SetText(tostring(math.max(0, tonumber(self.summary.unpricedCount) or 0)) .. " 项")
     end
     self:_refreshRows()

@@ -5,7 +5,7 @@
 ### 3.3.5 (2026-07-26)
 
 - 发件箱新增“记住上个收件人”，发送成功后自动保留名字，连续邮寄更省事
-- 新增“背包估值”，按价格库扫描价和卖店价汇总当前背包，并列出高价值及无价格物品
+- 新增“背包估值”，按价格库扫描价、卖店价和分解价值汇总当前背包，并列出高价值及无价格物品
 
 ### 3.3.4 (2026-07-26)
 
@@ -96,7 +96,7 @@
 ### 3.3.5 (2026-07-26)
 
 - Added Remember Last Recipient to keep the name after a successful send for faster repeat mailing
-- Added Bag Valuation to total current-bag scan and vendor values, with high-value and unpriced item details
+- Added Bag Valuation using scan, vendor, and disenchant values, with high-value and unpriced item details
 
 ### 3.3.4 (2026-07-26)
 

@@ -84,6 +84,9 @@ local function readItemInfo(api, item)
             name = info.name or info.itemName,
             link = info.hyperlink or info.itemLink,
             quality = info.quality,
+            itemLevel = info.itemLevel,
+            classID = info.classID,
+            bindType = info.bindType,
             icon = info.iconFileID or info.icon,
             vendorUnit = tonumber(info.sellPrice or info.vendorUnit) or 0,
         }
@@ -93,6 +96,9 @@ local function readItemInfo(api, item)
         name = values[1],
         link = values[2],
         quality = values[3],
+        itemLevel = values[4],
+        classID = values[12],
+        bindType = values[14],
         icon = values[10],
         vendorUnit = tonumber(values[11]) or 0,
     }
@@ -102,6 +108,9 @@ local function mergeMetadata(target, source)
     if source.link then target.link = source.link end
     if source.name then target.name = source.name end
     if source.quality ~= nil then target.quality = source.quality end
+    if source.itemLevel ~= nil then target.itemLevel = source.itemLevel end
+    if source.classID ~= nil then target.classID = source.classID end
+    if source.bindType ~= nil then target.bindType = source.bindType end
     if source.icon ~= nil then target.icon = source.icon end
     if source.vendorUnit ~= nil then target.vendorUnit = source.vendorUnit end
 end

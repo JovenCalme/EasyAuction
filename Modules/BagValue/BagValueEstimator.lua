@@ -24,6 +24,13 @@ local function getPrice(provider, item, now)
     end
 end
 
+local function getDisenchantPrice(provider, item)
+    if type(provider) ~= "function" then return 0 end
+    local ok, value = pcall(provider, item.classID, item.quality, item.itemLevel)
+    if not ok then return 0 end
+    return nonNegativeInteger(value)
+end
+
 local function normalizePrice(result, now, freshSeconds)
     if type(result) == "number" then
         if result <= 0 then return nil, nil, nil, "missing" end
@@ -58,6 +65,7 @@ function Estimator.New(deps)
     deps = deps or {}
     return setmetatable({
         priceProvider = deps.priceProvider,
+        disenchantProvider = deps.disenchantProvider or _G.GetDisenchantValue,
         now = deps.now,
         freshSeconds = tonumber(deps.freshSeconds) or DEFAULT_FRESH_SECONDS,
     }, Estimator)
@@ -77,6 +85,7 @@ function Estimator:Estimate(snapshotOrItems, options)
         total = 0,
         auction = 0,
         vendor = 0,
+        disenchant = 0,
         pricedCount = 0,
         unpricedCount = 0,
         pendingCount = snapshot and nonNegativeInteger(snapshot.unresolvedCount) or 0,
@@ -95,19 +104,26 @@ function Estimator:Estimate(snapshotOrItems, options)
                 unboundCount = count - boundCount
             end
             local vendorUnit = nonNegativeInteger(item.vendorUnit)
+            local disenchantUnit = getDisenchantPrice(self.disenchantProvider, item)
             local priceResult
             if unboundCount > 0 then priceResult = getPrice(self.priceProvider, item, now) end
             local auctionUnit, source, observedAt, freshness = normalizePrice(
                 priceResult, now, self.freshSeconds)
             local auctionPricedCount = auctionUnit and unboundCount or 0
-            local vendorPricedCount = boundCount
-            if not auctionUnit then vendorPricedCount = vendorPricedCount + unboundCount end
-            if vendorUnit <= 0 then vendorPricedCount = 0 end
-            local pricedItemCount = auctionPricedCount + vendorPricedCount
+            local recoveryCount = count - auctionPricedCount
+            local vendorPricedCount = 0
+            local disenchantPricedCount = 0
+            if vendorUnit > 0 and vendorUnit >= disenchantUnit then
+                vendorPricedCount = recoveryCount
+            elseif disenchantUnit > 0 then
+                disenchantPricedCount = recoveryCount
+            end
+            local pricedItemCount = auctionPricedCount + vendorPricedCount + disenchantPricedCount
             local unpricedItemCount = count - pricedItemCount
             local auctionValue = (auctionUnit or 0) * auctionPricedCount
             local vendorValue = vendorUnit * vendorPricedCount
-            local totalValue = auctionValue + vendorValue
+            local disenchantValue = disenchantUnit * disenchantPricedCount
+            local totalValue = auctionValue + vendorValue + disenchantValue
             local row = {
                 itemID = item.itemID,
                 name = item.name,
@@ -118,12 +134,14 @@ function Estimator:Estimate(snapshotOrItems, options)
                 boundCount = boundCount,
                 unboundCount = unboundCount,
                 vendorUnit = vendorUnit,
+                disenchantUnit = disenchantUnit,
                 auctionUnit = auctionUnit,
                 source = source,
                 observedAt = observedAt,
                 freshness = freshness,
                 auctionValue = auctionValue,
                 vendorValue = vendorValue,
+                disenchantValue = disenchantValue,
                 totalValue = totalValue,
                 pricedItemCount = pricedItemCount,
                 unpricedItemCount = unpricedItemCount,
@@ -133,6 +151,7 @@ function Estimator:Estimate(snapshotOrItems, options)
             summary.total = summary.total + totalValue
             summary.auction = summary.auction + auctionValue
             summary.vendor = summary.vendor + vendorValue
+            summary.disenchant = summary.disenchant + disenchantValue
             summary.pricedItemCount = summary.pricedItemCount + pricedItemCount
             summary.unpricedItemCount = summary.unpricedItemCount + unpricedItemCount
             if pricedItemCount > 0 then
@@ -148,6 +167,7 @@ function Estimator:Estimate(snapshotOrItems, options)
     summary.totalValue = summary.total
     summary.auctionValue = summary.auction
     summary.vendorValue = summary.vendor
+    summary.disenchantValue = summary.disenchant
     return { rows = rows, summary = summary }
 end
 
