@@ -99,6 +99,25 @@ local function GetFallbackKeysByItemID(db, itemID)
     return keys
 end
 
+local function HasHistory(history)
+    return type(history) == "table" and (#history > 0 or history.minUnit or history.records)
+end
+
+local function MergeHistory(target, history)
+    local rows = type(history.records) == "table" and history.records or history
+    for _, row in ipairs(rows) do
+        target[#target + 1] = row
+    end
+    local minUnit = tonumber(history.minUnit)
+    if minUnit and (not target.minUnit or minUnit < target.minUnit) then
+        target.minUnit = minUnit
+    end
+    local lastScanT = tonumber(history.lastScanT or history.updatedAt or history.lastUpdated)
+    if lastScanT and (not target.lastScanT or lastScanT > target.lastScanT) then
+        target.lastScanT = lastScanT
+    end
+end
+
 local function GetHistory(itemID, itemName)
     local key = GetItemKey(itemID, itemName)
     if not key then
@@ -106,15 +125,25 @@ local function GetHistory(itemID, itemName)
     end
     for _, db in ipairs(GetPriceDBCandidates()) do
         if type(_G.EasyAuction_GetPriceHistory) == "function" then
-            local history = _G.EasyAuction_GetPriceHistory(key, db)
-            if type(history) == "table" and (#history > 0 or history.minUnit or history.records) then
-                return history, key
-            end
-            for _, fallbackKey in ipairs(GetFallbackKeysByItemID(db, itemID)) do
-                history = _G.EasyAuction_GetPriceHistory(fallbackKey, db)
-                if type(history) == "table" and (#history > 0 or history.minUnit or history.records) then
-                    return history, fallbackKey
+            local merged = {}
+            local matchedKey
+            local seenKeys = {}
+            local function addHistory(historyKey)
+                if not historyKey or seenKeys[historyKey] then return end
+                seenKeys[historyKey] = true
+                local history = _G.EasyAuction_GetPriceHistory(historyKey, db)
+                if HasHistory(history) then
+                    matchedKey = matchedKey or historyKey
+                    MergeHistory(merged, history)
                 end
+            end
+
+            addHistory(key)
+            for _, fallbackKey in ipairs(GetFallbackKeysByItemID(db, itemID)) do
+                addHistory(fallbackKey)
+            end
+            if matchedKey then
+                return merged, matchedKey
             end
         end
         if type(db.PriceHistory) == "table" then
