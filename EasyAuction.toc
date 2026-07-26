@@ -61,3 +61,10 @@ Pro/ProStrategyEditor.lua
 Pro/ProMaintenance.lua
 Pro/ProBuyFrame.lua
 Pro/ProPostQueue.lua
+Modules/BagValue/BagValueNamespace.lua
+Modules/BagValue/BagInventoryScanner.lua
+Modules/BagValue/BagValuePriceProvider.lua
+Modules/BagValue/BagValueEstimator.lua
+Modules/BagValue/BagValueView.lua
+Modules/BagValue/BagValueController.lua
+Modules/BagValue/BagValueBootstrap.lua

@@ -3268,6 +3268,7 @@ local EA_LayoutDBFrameControls
 local resetBtn
 local opportunityBtn
 local DB_SEARCH_LEFT = 288
+local DB_SEARCH_COMPACT_LEFT = 200
 local DB_SEARCH_MIN_WIDTH = 150
 local DB_SEARCH_FALLBACK_WIDTH = 220
 
@@ -3288,6 +3289,7 @@ local function EA_GetDBTopButtonLeftEdge()
         opportunityBtn,
         DBFrame and DBFrame.EA_ExportBtn,
         DBFrame and DBFrame.EasyAuctionProStrategyButton,
+        DBFrame and DBFrame.EasyAuctionBagValueButton,
     }
     for _, button in ipairs(buttons) do
         local left = EA_GetRelativeLeft(button, DBFrame)
@@ -3300,13 +3302,14 @@ end
 
 local function EA_LayoutDBSearchBox()
     if not searchEditBox or not DBFrame then return end
+    local searchLeft = DBFrame.EasyAuctionBagValueButton and DB_SEARCH_COMPACT_LEFT or DB_SEARCH_LEFT
     local width = DB_SEARCH_FALLBACK_WIDTH
     local buttonLeft = EA_GetDBTopButtonLeftEdge()
     if buttonLeft then
-        width = math.max(DB_SEARCH_MIN_WIDTH, buttonLeft - DB_SEARCH_LEFT - 10)
+        width = math.max(DB_SEARCH_MIN_WIDTH, buttonLeft - searchLeft - 10)
     end
     searchEditBox:ClearAllPoints()
-    searchEditBox:SetPoint("TOPLEFT", DBFrame, "TOPLEFT", DB_SEARCH_LEFT, -14)
+    searchEditBox:SetPoint("TOPLEFT", DBFrame, "TOPLEFT", searchLeft, -14)
     searchEditBox:SetSize(width, 22)
     searchEditBox:SetFrameLevel(DBFrame:GetFrameLevel() + 20)
 end
@@ -3442,7 +3445,7 @@ EA_LayoutDBFrameControls = function()
     if title then
         title:ClearAllPoints()
         title:SetPoint("TOPLEFT", DBFrame, "TOPLEFT", 14, -14)
-        title:SetWidth(260)
+        title:SetWidth(DBFrame.EasyAuctionBagValueButton and (DB_SEARCH_COMPACT_LEFT - 28) or 260)
         title:SetJustifyH("LEFT")
         title:SetWordWrap(false)
     end

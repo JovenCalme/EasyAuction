@@ -1090,6 +1090,9 @@ local function ApplyEasyAuctionUIScale()
     if EasyAuctionDBFrame then
         EasyAuctionDBFrame:SetScale(scale)
     end
+    if _G.EasyAuctionBagValueFrame then
+        _G.EasyAuctionBagValueFrame:SetScale(scale)
+    end
     local Pro = ns and ns.EasyAuctionPro
     if Pro and Pro.ApplyAllFrameScale then
         Pro.ApplyAllFrameScale()
