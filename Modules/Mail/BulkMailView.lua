@@ -51,24 +51,24 @@ local HISTORY_SOURCE_LABEL = {
     single = "普通",
 }
 
-local function formatHistorySummary(record)
-    local source = HISTORY_SOURCE_LABEL[record.sourceKind] or tostring(record.sourceKind or "")
+local function formatHistoryResult(record)
     local count = record.selectedCount or #(record.recipients or {})
     local success = tonumber(record.successCount) or 0
     local failed = tonumber(record.failedCount) or 0
     local unknown = tonumber(record.unknownCount) or 0
     local cancelled = tonumber(record.cancelledCount) or 0
-    local states = {}
     if success == count and failed == 0 and unknown == 0 and cancelled == 0 then
-        states[1] = "全部成功"
-    else
-        if success > 0 then states[#states + 1] = "成功 " .. success end
-        if failed > 0 then states[#states + 1] = "失败 " .. failed end
-        if unknown > 0 then states[#states + 1] = "未知 " .. unknown end
-        if cancelled > 0 then states[#states + 1] = "取消 " .. cancelled end
+        return "成功", 0.35, 1, 0.45
     end
-    if #states == 0 then states[1] = "无结果" end
-    return string.format("%s · %d 人 · %s", source, count, table.concat(states, " · "))
+    local states = {}
+    if success > 0 then states[#states + 1] = "成 " .. success end
+    if failed > 0 then states[#states + 1] = "败 " .. failed end
+    if unknown > 0 then states[#states + 1] = "未知 " .. unknown end
+    if cancelled > 0 then states[#states + 1] = "取消 " .. cancelled end
+    if #states == 0 then return "无结果", 0.65, 0.65, 0.65 end
+    if failed > 0 then return table.concat(states, " / "), 1, 0.45, 0.40 end
+    if unknown > 0 then return table.concat(states, " / "), 1, 0.75, 0.30 end
+    return table.concat(states, " / "), 0.68, 0.68, 0.68
 end
 
 local function truncateUTF8(value, maximum)
@@ -130,7 +130,7 @@ local function layoutHistoryDetailRow(row, kind)
     if kind == "attachment" then
         row.icon:Show()
         row.name:SetPoint("LEFT", row.icon, "RIGHT", 6, 0)
-        row.name:SetWidth(350)
+        row.name:SetWidth(324)
         row.status:SetPoint("LEFT", row.name, "RIGHT", 0, 0)
         row.status:SetWidth(0)
         row.amount:SetPoint("LEFT", row.name, "RIGHT", 0, 0)
@@ -139,14 +139,43 @@ local function layoutHistoryDetailRow(row, kind)
         row.postage:SetWidth(68)
     else
         row.name:SetPoint("LEFT", row, "LEFT", 4, 0)
-        row.name:SetWidth(140)
+        row.name:SetWidth(126)
         row.status:SetPoint("LEFT", row.name, "RIGHT", 4, 0)
         row.status:SetWidth(56)
         row.amount:SetPoint("LEFT", row.status, "RIGHT", 4, 0)
-        row.amount:SetWidth(140)
+        row.amount:SetWidth(112)
         row.postage:SetPoint("LEFT", row.amount, "RIGHT", 4, 0)
-        row.postage:SetWidth(122)
+        row.postage:SetWidth(110)
     end
+end
+
+local function createHistoryHeader(createFrame, parent, labels, widths)
+    local header = createFrame("Frame", nil, parent, "BackdropTemplate")
+    header:SetPoint("TOPLEFT", parent, "TOPLEFT", 5, -5)
+    header:SetSize(parent:GetWidth() - 10, 20)
+    if header.SetBackdrop then
+        header:SetBackdrop({
+            bgFile = "Interface/Buttons/WHITE8X8",
+            edgeFile = "Interface/Buttons/WHITE8X8",
+            edgeSize = 1,
+        })
+        header:SetBackdropColor(0.10, 0.075, 0.02, 0.78)
+        header:SetBackdropBorderColor(0.30, 0.24, 0.10, 0.9)
+    end
+    header.labels = {}
+    local offset = 0
+    for index = 1, #labels do
+        local label = header:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+        local padding = index == 1 and 8 or 4
+        label:SetPoint("LEFT", header, "LEFT", offset + padding, 0)
+        label:SetWidth(widths[index] - padding)
+        label:SetJustifyH(index == 3 and "CENTER" or "LEFT")
+        label:SetText(labels[index])
+        label:SetTextColor(0.95, 0.78, 0.22)
+        header.labels[index] = label
+        offset = offset + widths[index]
+    end
+    return header
 end
 
 local function ensureBulkConfirmRows(popup)
@@ -771,7 +800,7 @@ function BulkMailView:_createHistoryPanel(frame, createFrame)
     panel.title:SetPoint("TOPLEFT", 10, -4)
     panel.title:SetText("邮寄记录")
     panel.detailTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    panel.detailTitle:SetPoint("TOPLEFT", 276, -4)
+    panel.detailTitle:SetPoint("TOPLEFT", 332, -4)
     panel.detailTitle:SetText("发送结果")
     panel.retry = createFrame("Button", nil, panel, "UIPanelButtonTemplate")
     panel.retry:SetSize(130, 24)
@@ -789,22 +818,26 @@ function BulkMailView:_createHistoryPanel(frame, createFrame)
     panel.error:SetJustifyH("LEFT")
     panel.error:SetTextColor(1, 0.25, 0.25)
     panel.batchListFrame = createFrame("Frame", nil, panel, "InsetFrameTemplate")
-    panel.batchListFrame:SetSize(252, 252)
+    panel.batchListFrame:SetSize(318, 296)
     panel.batchListFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 4, -24)
     panel.detailListFrame = createFrame("Frame", nil, panel, "InsetFrameTemplate")
-    panel.detailListFrame:SetSize(488, 252)
-    panel.detailListFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 270, -24)
+    panel.detailListFrame:SetSize(432, 296)
+    panel.detailListFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 326, -24)
     panel.batchEmpty = panel.batchListFrame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     panel.batchEmpty:SetPoint("CENTER", panel.batchListFrame, "CENTER", 0, 0)
     panel.batchEmpty:SetText("暂无邮寄记录")
     panel.detailEmpty = panel.detailListFrame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     panel.detailEmpty:SetPoint("CENTER", panel.detailListFrame, "CENTER", 0, 0)
     panel.detailEmpty:SetText("选择左侧记录查看发送结果")
+    panel.batchHeader = createHistoryHeader(createFrame, panel.batchListFrame,
+        { "时间", "类型", "人数", "结果" }, { 84, 62, 44, 118 })
+    panel.detailHeader = createHistoryHeader(createFrame, panel.detailListFrame,
+        { "收件人", "结果", "金额", "邮资" }, { 136, 62, 112, 112 })
     panel.batchRows, panel.detailRows = {}, {}
-    for index = 1, 5 do
+    for index = 1, 10 do
         local row = createFrame("Button", nil, panel.batchListFrame, "BackdropTemplate")
-        row:SetSize(242, 48)
-        row:SetPoint("TOPLEFT", panel.batchListFrame, "TOPLEFT", 5, -5 - (index - 1) * 49)
+        row:SetSize(308, 24)
+        row:SetPoint("TOPLEFT", panel.batchListFrame, "TOPLEFT", 5, -29 - (index - 1) * 26)
         if row.SetBackdrop then
             row:SetBackdrop({
                 bgFile = "Interface/Buttons/WHITE8X8",
@@ -815,12 +848,21 @@ function BulkMailView:_createHistoryPanel(frame, createFrame)
             row:SetBackdropBorderColor(0.20, 0.20, 0.20, 0.8)
         end
         row.time = row:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-        row.time:SetPoint("TOPLEFT", row, "TOPLEFT", 8, -3)
-        row.time:SetPoint("TOPRIGHT", row, "TOPRIGHT", -6, -3)
+        row.time:SetPoint("LEFT", row, "LEFT", 8, 0)
+        row.time:SetWidth(76)
         row.time:SetJustifyH("LEFT")
+        row.source = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.source:SetPoint("LEFT", row.time, "RIGHT", 8, 0)
+        row.source:SetWidth(54)
+        row.source:SetJustifyH("LEFT")
+        row.source:SetTextColor(0.82, 0.72, 0.48)
+        row.count = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+        row.count:SetPoint("LEFT", row.source, "RIGHT", 8, 0)
+        row.count:SetWidth(36)
+        row.count:SetJustifyH("CENTER")
         row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.text:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 8, 3)
-        row.text:SetPoint("BOTTOMRIGHT", row, "BOTTOMRIGHT", -6, 3)
+        row.text:SetPoint("LEFT", row.count, "RIGHT", 8, 0)
+        row.text:SetWidth(100)
         row.text:SetJustifyH("LEFT")
         if row.text.SetWordWrap then row.text:SetWordWrap(false) end
         row.selectedTexture = row:CreateTexture(nil, "ARTWORK")
@@ -840,8 +882,8 @@ function BulkMailView:_createHistoryPanel(frame, createFrame)
     end
     for index = 1, 13 do
         local row = createFrame("Button", nil, panel.detailListFrame, "BackdropTemplate")
-        row:SetSize(478, 18)
-        row:SetPoint("TOPLEFT", panel.detailListFrame, "TOPLEFT", 5, -5 - (index - 1) * 19)
+        row:SetSize(422, 18)
+        row:SetPoint("TOPLEFT", panel.detailListFrame, "TOPLEFT", 5, -29 - (index - 1) * 20)
         if row.SetBackdrop then
             row:SetBackdrop({
                 bgFile = "Interface/Buttons/WHITE8X8",
@@ -945,7 +987,12 @@ function BulkMailView:RefreshHistory()
             local timestamp = _G.date and _G.date("%m-%d %H:%M", record.startedAt or 0)
                 or tostring(record.startedAt or "")
             row.time:SetText(timestamp)
-            row.text:SetText(formatHistorySummary(record))
+            row.source:SetText(HISTORY_SOURCE_LABEL[record.sourceKind]
+                or tostring(record.sourceKind or ""))
+            row.count:SetText(tostring(record.selectedCount or #(record.recipients or {})))
+            local resultText, resultR, resultG, resultB = formatHistoryResult(record)
+            row.text:SetText(resultText)
+            row.text:SetTextColor(resultR, resultG, resultB)
             row.selected = record.id == self.selectedHistoryId
             row.selectedTexture:SetShown(row.selected)
             if row.SetBackdropBorderColor then
@@ -953,7 +1000,8 @@ function BulkMailView:RefreshHistory()
                     row:SetBackdropColor(0.075, 0.065, 0.035, 0.72)
                     row:SetBackdropBorderColor(0.38, 0.33, 0.18, 0.9)
                 else
-                    row:SetBackdropColor(0.035, 0.035, 0.035, 0.55)
+                    local shade = index % 2 == 0 and 0.045 or 0.030
+                    row:SetBackdropColor(shade, shade, shade, 0.55)
                     row:SetBackdropBorderColor(0.20, 0.20, 0.20, 0.8)
                 end
             end
@@ -962,6 +1010,9 @@ function BulkMailView:RefreshHistory()
             row.selected = false
             row.selectedTexture:Hide()
             row.time:SetText("")
+            row.source:SetText("")
+            row.count:SetText("")
+            row.text:SetText("")
             row:Hide()
         end
     end
@@ -995,8 +1046,8 @@ function BulkMailView:RefreshHistory()
                 row.status:SetText(STATUS_TEXT[result.state] or result.state or "")
                 local statusColor = STATUS_COLOR[result.state]
                 if statusColor then row.status:SetTextColor(statusColor[1], statusColor[2], statusColor[3]) end
-                row.amount:SetText("金额 " .. formatMoney(result.amount or 0))
-                row.postage:SetText(result.postage ~= nil and ("邮资 " .. formatMoney(result.postage)) or "邮资 -")
+                row.amount:SetText(formatMoney(result.amount or 0))
+                row.postage:SetText(result.postage ~= nil and formatMoney(result.postage) or "-")
                 if row.SetBackdropColor then row:SetBackdropColor(0.045, 0.045, 0.045, 0.58) end
                 if row.SetBackdropBorderColor then row:SetBackdropBorderColor(0.30, 0.30, 0.30, 0.9) end
             elseif attachment then
@@ -1009,7 +1060,10 @@ function BulkMailView:RefreshHistory()
                 row.status:SetText("")
                 row.amount:SetText("")
                 row.postage:SetText("× " .. math.max(1, math.floor(tonumber(attachment.count) or 1)))
-                if row.SetBackdropColor then row:SetBackdropColor(0.025, 0.025, 0.025, 0.38) end
+                if row.SetBackdropColor then
+                    local shade = index % 2 == 0 and 0.035 or 0.022
+                    row:SetBackdropColor(shade, shade, shade, 0.42)
+                end
                 if row.SetBackdropBorderColor then row:SetBackdropBorderColor(0.16, 0.16, 0.16, 0.65) end
             end
         else

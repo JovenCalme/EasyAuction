@@ -10,7 +10,7 @@
 - 背包新增估值图标，指向估值入口可快速查看总额和高价值物品
 - 邮寄记录现在会保存普通和批量邮件，金额与邮资改用金银铜图标显示
 - 带附件的邮寄记录新增简洁物品清单，清楚显示图标、名称和数量
-- 优化邮寄记录行高，避免时间与结果摘要重叠
+- 邮寄记录改为清晰表格布局，可按时间、类型、人数和结果快速浏览
 
 ### 3.3.4 (2026-07-26)
 
@@ -106,7 +106,7 @@
 - Added a bag valuation icon and compact hover summary with totals and top-value items
 - Mail history now includes regular and bulk mail, with coin icons for amounts and postage
 - Mail records with attachments now show a clean list of item icons, names, and quantities
-- Increased mail history row height to prevent timestamp and result overlap
+- Redesigned mail history as a clear table for faster scanning by time, type, count, and result
 
 ### 3.3.4 (2026-07-26)
 
