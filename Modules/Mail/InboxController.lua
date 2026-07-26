@@ -14,6 +14,132 @@ local TERMINAL_STATES = {
     INDETERMINATE = true,
 }
 
+local function formatMoney(amount)
+    amount = math.max(0, math.floor(tonumber(amount) or 0))
+    if _G and type(_G.GetCoinTextureString) == "function" then
+        local ok, text = pcall(_G.GetCoinTextureString, amount, 14)
+        if ok and type(text) == "string" then return text end
+    end
+    return tostring(amount) .. " 铜"
+end
+
+local function formatDays(days)
+    days = math.max(0, tonumber(days) or 0)
+    if days >= 1 then return string.format("%.1f 天", days) end
+    local hours = days * 24
+    if hours >= 1 then return string.format("%.1f 小时", hours) end
+    return string.format("%d 分钟", math.max(0, math.floor(hours * 60 + 0.5)))
+end
+
+local function returnMailIdentity(mail)
+    local key = mail and mail.key
+    if type(key) ~= "table" or type(key.fingerprint) ~= "string"
+        or type(key.duplicateOrdinal) ~= "number" then return nil end
+    return tostring(#key.fingerprint) .. ":" .. key.fingerprint
+        .. ":" .. tostring(key.duplicateOrdinal)
+end
+
+local function buildReturnPlan(snapshot)
+    snapshot = snapshot or {}
+    local plan = {
+        mails = {}, count = 0, senderCount = 0, attachmentCount = 0,
+        money = 0, codCount = 0, minDaysLeft = nil,
+        current = math.max(0, tonumber(snapshot.current) or 0),
+        total = math.max(0, tonumber(snapshot.total) or 0),
+        byIdentity = {},
+    }
+    local senders = {}
+    for index = 1, #(snapshot.mails or {}) do
+        local mail = snapshot.mails[index]
+        local canReturn = type(mail.capabilities) == "table"
+            and mail.capabilities.canReturn == true
+        local identity = canReturn and returnMailIdentity(mail) or nil
+        if identity and not plan.byIdentity[identity] then
+            plan.mails[#plan.mails + 1] = mail
+            plan.byIdentity[identity] = {
+                money = math.max(0, tonumber(mail.money) or 0),
+                cod = math.max(0, tonumber(mail.cod) or 0),
+                itemCount = math.max(0, tonumber(mail.itemCount) or 0),
+            }
+            plan.count = plan.count + 1
+            plan.attachmentCount = plan.attachmentCount
+                + math.max(0, tonumber(mail.itemCount) or 0)
+            plan.money = plan.money + math.max(0, tonumber(mail.money) or 0)
+            if (tonumber(mail.cod) or 0) > 0 then plan.codCount = plan.codCount + 1 end
+            local days = tonumber(mail.daysLeft)
+            if days and (not plan.minDaysLeft or days < plan.minDaysLeft) then
+                plan.minDaysLeft = days
+            end
+            local sender = tostring(mail.sender or "")
+            if sender ~= "" and not senders[sender] then
+                senders[sender] = true
+                plan.senderCount = plan.senderCount + 1
+            end
+        end
+    end
+    return plan
+end
+
+local function sameReturnPlan(expected, actual)
+    if not expected or not actual or expected.count ~= actual.count then return false end
+    for identity, values in pairs(expected.byIdentity or {}) do
+        local current = actual.byIdentity and actual.byIdentity[identity]
+        if not current or current.money ~= values.money or current.cod ~= values.cod
+            or current.itemCount ~= values.itemCount then return false end
+    end
+    return true
+end
+
+local function ensureReturnConfirmRows(popup)
+    if popup.easyAuctionReturnRows then return popup.easyAuctionReturnRows end
+    local rows = {}
+    for index = 1, 5 do
+        local y = -58 - (index - 1) * 24
+        rows[index] = {
+            label = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlight"),
+            value = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlight"),
+        }
+        rows[index].label:SetPoint("TOPLEFT", popup, "TOPLEFT", 20, y)
+        rows[index].label:SetSize(104, 22)
+        rows[index].label:SetJustifyH("CENTER")
+        rows[index].value:SetPoint("TOPLEFT", popup, "TOPLEFT", 132, y)
+        rows[index].value:SetSize(168, 22)
+        rows[index].value:SetJustifyH("RIGHT")
+    end
+    popup.easyAuctionReturnWarning = popup:CreateFontString(nil, "ARTWORK", "GameFontHighlightSmall")
+    popup.easyAuctionReturnWarning:SetPoint("TOPLEFT", popup, "TOPLEFT", 20, -188)
+    popup.easyAuctionReturnWarning:SetSize(280, 38)
+    popup.easyAuctionReturnWarning:SetJustifyH("LEFT")
+    popup.easyAuctionReturnWarning:SetWordWrap(true)
+    popup.easyAuctionReturnWarning:SetTextColor(1, 0.25, 0.25)
+    popup.easyAuctionReturnRows = rows
+    return rows
+end
+
+local function showReturnConfirm(popup, data)
+    if not popup then return end
+    popup:SetHeight(270)
+    local rows = ensureReturnConfirmRows(popup)
+    for index = 1, #rows do
+        local rowData = data and data.rows and data.rows[index] or {}
+        rows[index].label:SetText(rowData.label or "")
+        rows[index].value:SetText(rowData.value or "")
+        rows[index].label:Show()
+        rows[index].value:Show()
+    end
+    popup.easyAuctionReturnWarning:SetText(data and data.warning
+        or "邮件、附件和金币将全部退还给发件人，操作无法撤销。")
+    popup.easyAuctionReturnWarning:Show()
+end
+
+local function hideReturnConfirm(popup)
+    for _, row in ipairs(popup and popup.easyAuctionReturnRows or {}) do
+        row.label:Hide()
+        row.value:Hide()
+    end
+    if popup and popup.easyAuctionReturnWarning then popup.easyAuctionReturnWarning:Hide() end
+end
+
 local function newError(code, message, detail)
     if type(Mail.NewError) == "function" then
         return Mail:NewError(code, message, detail)
@@ -53,6 +179,8 @@ function Controller.New(deps)
         ownsRepository = false,
         ownsQueue = false,
         ownsView = false,
+        returnCount = 0,
+        returnBusy = false,
     }, Controller)
 end
 
@@ -134,6 +262,42 @@ function Controller:_hideNativeInboxLabels()
     for _, label in pairs(self.nativeInboxLabels or {}) do label:Hide() end
 end
 
+function Controller:_ensureNativeReturnButton()
+    if self.nativeReturnButton then return self.nativeReturnButton end
+    local parent = _G and (_G.InboxFrame or _G.MailFrame)
+    local createFrame = self.deps.createFrame or (_G and _G.CreateFrame)
+    if not parent or type(createFrame) ~= "function" then return nil end
+    local button = createFrame("Button", nil, parent, "UIPanelButtonTemplate")
+    button:SetSize(72, 24)
+    local openAll = _G and _G.OpenAllMail
+    if openAll then button:SetPoint("LEFT", openAll, "RIGHT", 4, 0)
+    else button:SetPoint("CENTER", parent, "BOTTOM", 65, 114) end
+    button:SetText("闪退")
+    button:SetScript("OnClick", function() self:RequestReturnAll() end)
+    button:Disable()
+    self.nativeReturnButton = button
+    return button
+end
+
+function Controller:_setReturnButtons(count, busy)
+    count = math.max(0, math.floor(tonumber(count) or 0))
+    self.returnCount = count
+    self.returnBusy = busy == true
+    local view = self.view
+    if view and type(view.SetReturnCount) == "function" then
+        view:SetReturnCount(count, self.returnBusy)
+    end
+    local button = self:_ensureNativeReturnButton()
+    if button then
+        button:SetText("闪退")
+        if self.enabled and self.active and not self.returnBusy and count > 0 then
+            button:Enable()
+        else
+            button:Disable()
+        end
+    end
+end
+
 function Controller:RefreshNativeInboxLabels()
     if not self.enabled then self:_hideNativeInboxLabels() return false end
     local labels = self:_ensureNativeInboxLabels()
@@ -199,6 +363,34 @@ function Controller:_onQueueChanged(state)
     local view = self.view
     if view and type(view.SetEnabled) == "function" then
         view:SetEnabled(not state or TERMINAL_STATES[state.state] == true)
+    end
+    if state and state.action == "return_mail" then
+        local terminal = TERMINAL_STATES[state.state] == true
+        self:_setReturnButtons(self.returnCount, not terminal)
+        local openAll = _G and _G.OpenAllMail
+        if openAll then
+            if terminal and self.returnDisabledOpenAll then
+                openAll:Enable()
+                self.returnDisabledOpenAll = nil
+            elseif not terminal and not self.returnDisabledOpenAll then
+                self.returnDisabledOpenAll = openAll.IsEnabled == nil or openAll:IsEnabled()
+                openAll:Disable()
+            end
+        end
+        if terminal and self.lastReturnReportedId ~= state.operationId then
+            self.lastReturnReportedId = state.operationId
+            local message
+            if state.state == "SUCCEEDED" then
+                message = string.format("闪退完成：已退回 %d 封邮件。", state.completedCount or 0)
+            else
+                message = string.format("闪退已停止：已退回 %d/%d 封。%s",
+                    state.completedCount or 0, state.totalCount or 0,
+                    state.error and state.error.message or "")
+                if state.error then self:_reportError(state.error) end
+            end
+            local chat = _G and _G.DEFAULT_CHAT_FRAME
+            if chat and type(chat.AddMessage) == "function" then chat:AddMessage(message) end
+        end
     end
     if state and TERMINAL_STATES[state.state] then self:MarkDirty("QUEUE_TERMINAL") end
 end
@@ -282,12 +474,103 @@ function Controller:_ensureView()
             onSearchChanged = function(query) self:SetQuery(query) end,
             onCategoryChanged = function(categoryId) self:SetCategory(categoryId) end,
             onGroupStacksChanged = function(enabled) self:SetGroupStacks(enabled) end,
+            onReturnAll = function() self:RequestReturnAll() end,
             categories = self:_categories(),
             onActivated = function() self:MarkDirty("TAB_ACTIVATED") end,
         })
         self.ownsView = true
     end
     return self.view
+end
+
+function Controller:_startReturnPlan(plan)
+    local repository = self:_ensureRepository()
+    if not repository or type(repository.Snapshot) ~= "function" then
+        local err = newError("MISSING_DEPENDENCY", "邮件仓库尚不可用。")
+        self:_reportError(err)
+        return nil, err
+    end
+    local snapshot, snapshotError = repository:Snapshot()
+    if not snapshot then
+        self:_reportError(snapshotError)
+        return nil, snapshotError
+    end
+    local current = buildReturnPlan(snapshot)
+    if not sameReturnPlan(plan, current) then
+        local err = newError("RETURN_PLAN_CHANGED", "邮箱内容已变化，请重新确认闪退邮件。")
+        self:_reportError(err)
+        self:_setReturnButtons(current.count, false)
+        return nil, err
+    end
+    local queue = self:_ensureQueue()
+    if not queue or type(queue.EnqueueReturns) ~= "function" then
+        local err = newError("MISSING_DEPENDENCY", "退信队列尚不可用。")
+        self:_reportError(err)
+        return nil, err
+    end
+    local operationId, enqueueError = queue:EnqueueReturns(current.mails)
+    if not operationId then self:_reportError(enqueueError) end
+    return operationId, enqueueError
+end
+
+function Controller:RequestReturnAll()
+    if not self.enabled or not self.active or self.returnBusy then return false end
+    local openAll = _G and _G.OpenAllMail
+    if openAll and type(openAll.IsEnabled) == "function" and not openAll:IsEnabled() then
+        local err = newError("OUTBOUND_BUSY", "原生全部打开正在处理邮件，请稍后再试。")
+        self:_reportError(err)
+        return nil, err
+    end
+    local repository = self:_ensureRepository()
+    if not repository or type(repository.Snapshot) ~= "function" then
+        local err = newError("MISSING_DEPENDENCY", "邮件仓库尚不可用。")
+        self:_reportError(err)
+        return nil, err
+    end
+    local snapshot, snapshotError = repository:Snapshot()
+    if not snapshot then
+        self:_reportError(snapshotError)
+        return nil, snapshotError
+    end
+    local plan = buildReturnPlan(snapshot)
+    self:_setReturnButtons(plan.count, false)
+    if plan.count == 0 then
+        local err = newError("NO_RETURNABLE_MAIL", "当前已加载邮件中没有可退邮件。")
+        self:_reportError(err)
+        return nil, err
+    end
+    if not _G or not _G.StaticPopupDialogs or type(_G.StaticPopup_Show) ~= "function" then
+        local err = newError("CONFIRMATION_UNAVAILABLE", "无法显示闪退确认窗口，操作已取消。")
+        self:_reportError(err)
+        return nil, err
+    end
+    if not _G.StaticPopupDialogs.EASYAUCTION_RETURN_ALL_CONFIRM then
+        _G.StaticPopupDialogs.EASYAUCTION_RETURN_ALL_CONFIRM = {
+            text = "%s", button1 = _G.ACCEPT or "确定", button2 = _G.CANCEL or "取消",
+            OnAccept = function(_, data)
+                if data and type(data.callback) == "function" then data.callback(data.plan) end
+            end,
+            OnShow = showReturnConfirm,
+            OnHide = hideReturnConfirm,
+            timeout = 0, whileDead = true, hideOnEscape = true, preferredIndex = 3,
+        }
+    end
+    local codText = plan.codCount > 0 and (" / 付款取件 " .. plan.codCount .. " 封") or ""
+    local rows = {
+        { label = "可退邮件", value = plan.count .. " 封" },
+        { label = "发件人数", value = plan.senderCount .. " 人" },
+        { label = "附件合计", value = plan.attachmentCount .. " 组" .. codText },
+        { label = "附带金币", value = formatMoney(plan.money) },
+        { label = "最早到期", value = plan.minDaysLeft and formatDays(plan.minDaysLeft) or "未知" },
+    }
+    _G.StaticPopup_Show("EASYAUCTION_RETURN_ALL_CONFIRM", "|cffffd100确认闪退邮件|r", nil, {
+        plan = plan,
+        rows = rows,
+        warning = string.format("仅处理当前已加载的 %d/%d 封邮件；附件和金币将退还，操作无法撤销。",
+            plan.current, plan.total),
+        callback = function(confirmedPlan) self:_startReturnPlan(confirmedPlan) end,
+    })
+    return true
 end
 
 function Controller:_reportError(errorObject)
@@ -339,6 +622,7 @@ function Controller:Refresh(reason)
     self.snapshot = snapshot
     self.entries = entries
     self.searchIndex = searchIndex
+    local returnPlan = buildReturnPlan(snapshot)
     self.rowOffset = projection.rowOffset or 0
     if type(view.SetQuery) == "function" then view:SetQuery(self.query) end
     if type(view.SetGroupStacks) == "function" then
@@ -350,6 +634,7 @@ function Controller:Refresh(reason)
         view:SetSummary(snapshot.current, snapshot.total)
     end
     view:Bind(projection)
+    self:_setReturnButtons(returnPlan.count, false)
     self:RefreshNativeInboxLabels()
     return projection
 end
@@ -422,6 +707,7 @@ function Controller:OnSessionStart(payload)
     if queue and type(queue.SetAccepting) == "function" then queue:SetAccepting(true) end
     local view = self:_ensureView()
     if view and type(view.SetEnabled) == "function" then view:SetEnabled(true) end
+    self:_setReturnButtons(self.returnCount, false)
     self:RefreshNativeInboxLabels()
     self:MarkDirty(payload and payload.reason or "MAIL_SESSION_STARTED")
 
@@ -436,6 +722,7 @@ function Controller:OnSessionStop(payload)
     local view = self.view
     if view and type(view.Hide) == "function" then view:Hide() end
     self:_hideNativeInboxLabels()
+    self:_setReturnButtons(0, false)
 end
 
 function Controller:OnWoWEvent(event, ...)
@@ -455,6 +742,8 @@ function Controller:Enable(context)
     self.generation = context and context.generation or self.generation
     self:_ensureRepository()
     self:_ensureQueue()
+    local nativeReturnButton = self:_ensureNativeReturnButton()
+    if nativeReturnButton then nativeReturnButton:Show() end
     self:_installNativeInboxHook()
     local view = self:_ensureView()
     if not view then
@@ -536,6 +825,7 @@ function Controller:Disable(context)
         if type(self.view.Hide) == "function" then self.view:Hide() end
     end
     self:_hideNativeInboxLabels()
+    if self.nativeReturnButton then self.nativeReturnButton:Hide() end
     return true
 end
 

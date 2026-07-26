@@ -63,6 +63,8 @@ function View.New(deps)
         qualityColors = true,
         summaryCurrent = 0,
         summaryTotal = 0,
+        returnCount = 0,
+        returnBusy = false,
         updatingControls = false,
     }, View)
     for index = 1, CELL_COUNT do self.cells[index] = {} end
@@ -142,6 +144,18 @@ function View:_createFrames(parent)
     self.summaryText = invoke(content, "CreateFontString", nil, "OVERLAY", "GameFontNormalSmall")
     invoke(self.summaryText, "SetPoint", "TOPLEFT", content, "TOPLEFT", 2, -38)
     invoke(self.summaryText, "SetText", "")
+
+    self.returnButton = createFrame("Button", nil, content, "UIPanelButtonTemplate")
+    invoke(self.returnButton, "SetSize", 80, 22)
+    invoke(self.returnButton, "SetPoint", "TOPRIGHT", content, "TOPRIGHT", -36, -32)
+    invoke(self.returnButton, "SetText", "闪退")
+    invoke(self.returnButton, "SetScript", "OnClick", function()
+        if self.enabled and not self.returnBusy and self.returnCount > 0
+            and type(self.deps.onReturnAll) == "function" then
+            self.deps.onReturnAll()
+        end
+    end)
+    invoke(self.returnButton, "Disable")
 
     local categoryOptions = {
         { id = "all", label = "全部", tooltip = "显示全部物品和金币" },
@@ -458,6 +472,17 @@ function View:SetSummary(current, total)
     invoke(self.summaryText, "Show")
 end
 
+function View:SetReturnCount(count, busy)
+    self.returnCount = math.max(0, math.floor(tonumber(count) or 0))
+    self.returnBusy = busy == true
+    invoke(self.returnButton, "SetText", "闪退")
+    if self.enabled and not self.returnBusy and self.returnCount > 0 then
+        invoke(self.returnButton, "Enable")
+    else
+        invoke(self.returnButton, "Disable")
+    end
+end
+
 function View:RequestRowOffset(offset)
     local maximum = self.projection and self.projection.maxRowOffset or 0
     offset = math.max(0, math.min(maximum, math.floor(tonumber(offset) or 0)))
@@ -476,6 +501,7 @@ function View:SetEnabled(enabled)
     self.enabled = enabled == true
     for index = 1, CELL_COUNT do self:_renderCell(index) end
     self:_renderCategories()
+    self:SetReturnCount(self.returnCount, self.returnBusy)
 end
 
 function View:Destroy()
@@ -509,6 +535,7 @@ function View:Destroy()
     self.defaultLabel = nil
     self.searchBox = nil
     self.summaryText = nil
+    self.returnButton = nil
     self.scrollBar = nil
     self.shown = false
 end

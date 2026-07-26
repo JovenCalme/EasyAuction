@@ -49,6 +49,36 @@ local function copySource(source)
     return copy
 end
 
+local function copyReturnMail(mail)
+    local key = mail and (mail.key or mail.mailKey)
+    return {
+        kind = "return_mail",
+        mailKey = key and {
+            fingerprint = key.fingerprint,
+            duplicateOrdinal = key.duplicateOrdinal,
+        } or nil,
+        mailIndex = mail and (mail.index or mail.mailIndex) or nil,
+        sender = mail and mail.sender or nil,
+        subject = mail and mail.subject or nil,
+    }
+end
+
+local function mailIdentity(key)
+    if type(key) ~= "table" or type(key.fingerprint) ~= "string"
+        or type(key.duplicateOrdinal) ~= "number" then return nil end
+    return tostring(#key.fingerprint) .. ":" .. key.fingerprint
+        .. ":" .. tostring(key.duplicateOrdinal)
+end
+
+local function canReturnMail(mail)
+    return type(mail) == "table" and type(mail.capabilities) == "table"
+        and mail.capabilities.canReturn == true
+end
+
+local function commandKey(command)
+    return command and (command.sourceKey or mailIdentity(command.mailKey)) or nil
+end
+
 local function compareCommands(left, right)
     local leftMail = tonumber(left.mailIndex) or 0
     local rightMail = tonumber(right.mailIndex) or 0
@@ -64,9 +94,10 @@ local function operationView(operation)
     local current = operation.commands and operation.commands[operation.commandIndex]
     return {
         operationId = operation.id,
+        action = operation.action,
         state = operation.state,
         error = operation.error,
-        currentSourceKey = current and current.sourceKey or nil,
+        currentSourceKey = commandKey(current),
         completedCount = operation.completedCount,
         totalCount = operation.commands and #operation.commands or 0,
         attemptCount = current and current.attemptCount or 0,
@@ -242,6 +273,52 @@ function Queue:Enqueue(entryOrSources, mode)
     return operationId
 end
 
+function Queue:EnqueueReturns(mails)
+    if self.accepting == false then
+        return nil, makeError("QUEUE_NOT_ACCEPTING", "收件队列正在关闭")
+    end
+    if type(mails) ~= "table" or #mails == 0 then
+        return nil, makeError("MAIL_MISSING", "没有可退回的邮件")
+    end
+
+    local commands, seen = {}, {}
+    for index = 1, #mails do
+        local mail = mails[index]
+        local key = mail and (mail.key or mail.mailKey)
+        local identity = mailIdentity(key)
+        if not identity or type(mail.index or mail.mailIndex) ~= "number" then
+            return nil, makeError("INVALID_MAIL", "退信邮件结构无效")
+        end
+        if not canReturnMail(mail) then
+            return nil, makeError("MAIL_NOT_RETURNABLE", "邮件当前不可退回", false, identity)
+        end
+        if not seen[identity] then
+            seen[identity] = true
+            commands[#commands + 1] = copyReturnMail(mail)
+        end
+    end
+    table.sort(commands, compareCommands)
+
+    local operationId = self:_newOperationId()
+    local operation = {
+        id = operationId,
+        action = "return_mail",
+        state = "QUEUED",
+        mode = "return_mails",
+        commands = commands,
+        commandIndex = 1,
+        completedCount = 0,
+        createdAt = self:_now(),
+        error = nil,
+        lease = nil,
+    }
+    self.operations[operationId] = operation
+    self.pendingIds[#self.pendingIds + 1] = operationId
+    self:_notify(operation)
+    self:_processNext()
+    return operationId
+end
+
 function Queue:_acquire(operation)
     local arbiter = self:_arbiter()
     if type(arbiter) ~= "table" or type(arbiter.Acquire) ~= "function" then
@@ -336,10 +413,32 @@ function Queue:_scheduleTimeout(operation, command)
     end)
 end
 
+function Queue:_waitForServer(operation)
+    local command = operation.commands[operation.commandIndex]
+    if not command then return end
+    command.serverWaitDeadline = command.serverWaitDeadline
+        or (self:_now() + self.timeoutSeconds)
+    if self:_now() >= command.serverWaitDeadline then
+        self:_finish(operation, "FAILED", makeError("OUTBOUND_BUSY",
+            "邮件服务器长时间未完成上一项操作", true, commandKey(command)))
+        return
+    end
+    self.timerToken = (self.timerToken or 0) + 1
+    local token = self.timerToken
+    self:_setState(operation, "RETRY_WAIT")
+    local schedule = self.schedule or defaultSchedule
+    schedule(0.15, function()
+        if token ~= self.timerToken or self.activeId ~= operation.id
+            or TERMINAL_STATES[operation.state] then return end
+        self:_dispatchCurrent(operation)
+    end)
+end
+
 function Queue:_resolve(command, snapshot)
     local repository = self:_repository()
     if type(repository) ~= "table" or type(repository.Snapshot) ~= "function"
-        or type(repository.ResolveSource) ~= "function" then
+        or (command.kind == "return_mail" and type(repository.ResolveMail) ~= "function")
+        or (command.kind ~= "return_mail" and type(repository.ResolveSource) ~= "function") then
         return nil, makeError("MISSING_DEPENDENCY", "InboxOperationQueue 缺少 InboxRepository")
     end
     if not snapshot then
@@ -347,10 +446,17 @@ function Queue:_resolve(command, snapshot)
         snapshot, snapshotError = repository:Snapshot()
         if not snapshot then return nil, snapshotError end
     end
+    if command.kind == "return_mail" then
+        return repository:ResolveMail(command.mailKey, snapshot)
+    end
     return repository:ResolveSource(command.sourceKey, snapshot)
 end
 
 local function identityMatches(expected, actual)
+    if expected.kind == "return_mail" then
+        return type(actual.key) == "table"
+            and mailIdentity(expected.mailKey) == mailIdentity(actual.key)
+    end
     if expected.kind ~= actual.kind then return false end
     if expected.kind == "item" and expected.itemKey ~= nil
         and actual.itemKey ~= expected.itemKey then
@@ -407,9 +513,15 @@ function Queue:_dispatchCurrent(operation)
             makeError("MAIL_MOVED", "执行前复核发现邮件身份已变化", false, command.sourceKey))
         return
     end
-    if resolved.isCOD == true or (tonumber(resolved.cod) or 0) > 0 then
+    if command.kind ~= "return_mail"
+        and (resolved.isCOD == true or (tonumber(resolved.cod) or 0) > 0) then
         self:_finish(operation, "FAILED", makeError("COD_REQUIRES_CONFIRMATION",
             "付款取件邮件必须在原生邮件详情中确认", false, command.sourceKey))
+        return
+    end
+    if command.kind == "return_mail" and not canReturnMail(resolved) then
+        self:_finish(operation, "FAILED", makeError("MAIL_NOT_RETURNABLE",
+            "执行前复核发现邮件已不可退回", false, commandKey(command)))
         return
     end
 
@@ -426,14 +538,19 @@ function Queue:_dispatchCurrent(operation)
             return
         end
         if commandPending then
+            if command.kind == "return_mail" and operation.completedCount > 0 then
+                self:_waitForServer(operation)
+                return
+            end
             self:_finish(operation, "FAILED", makeError(
                 "OUTBOUND_BUSY", "邮件服务器仍在处理上一项操作", true,
-                command.sourceKey))
+                commandKey(command)))
             return
         end
     end
 
-    command.mailIndex = resolved.mailIndex
+    local resolvedMailIndex = resolved.mailIndex or resolved.index
+    command.mailIndex = resolvedMailIndex
     command.attachmentIndex = resolved.attachmentIndex
     command.attemptCount = (command.attemptCount or 0) + 1
     command.attemptNonce = operation.id .. ":" .. tostring(operation.commandIndex)
@@ -444,7 +561,7 @@ function Queue:_dispatchCurrent(operation)
     if type(arbiter.SetAttempt) == "function" then
         local attemptOk, attemptError = arbiter:SetAttempt(operation.lease, {
             operationId = operation.id,
-            sourceKey = command.sourceKey,
+            sourceKey = commandKey(command),
             attemptNonce = command.attemptNonce,
             kind = command.kind,
         })
@@ -455,7 +572,8 @@ function Queue:_dispatchCurrent(operation)
         end
     end
 
-    if self.markRead and type(compat.MarkRead) == "function" then
+    if command.kind ~= "return_mail" and self.markRead
+        and type(compat.MarkRead) == "function" then
         compat:MarkRead(resolved.mailIndex)
     end
 
@@ -466,9 +584,11 @@ function Queue:_dispatchCurrent(operation)
     local callOk, accepted, apiError
     if command.kind == "item" and type(compat.TakeItem) == "function" then
         callOk, accepted, apiError = pcall(compat.TakeItem, compat,
-            resolved.mailIndex, resolved.attachmentIndex)
+            resolvedMailIndex, resolved.attachmentIndex)
     elseif command.kind == "money" and type(compat.TakeMoney) == "function" then
-        callOk, accepted, apiError = pcall(compat.TakeMoney, compat, resolved.mailIndex)
+        callOk, accepted, apiError = pcall(compat.TakeMoney, compat, resolvedMailIndex)
+    elseif command.kind == "return_mail" and type(compat.ReturnMail) == "function" then
+        callOk, accepted, apiError = pcall(compat.ReturnMail, compat, resolvedMailIndex)
     else
         self:_finish(operation, "FAILED", makeError("MISSING_DEPENDENCY", "缺少收件写 API"))
         return
@@ -506,6 +626,8 @@ function Queue:_completeCommand(operation)
     if command then command.confirmed = true end
     operation.completedCount = operation.completedCount + 1
     operation.commandIndex = operation.commandIndex + 1
+    local nextCommand = operation.commands[operation.commandIndex]
+    if nextCommand then nextCommand.serverWaitDeadline = nil end
     if operation.commandIndex > #operation.commands then
         self:_finish(operation, "SUCCEEDED")
     elseif self.draining then
@@ -521,7 +643,11 @@ function Queue:_confirmCurrent(operation)
     local command = operation.commands[operation.commandIndex]
     if not command or not command.dispatched then return false end
     local resolved, resolveError = self:_resolve(command)
-    if not resolved and resolveError and resolveError.code == "SOURCE_MISSING" then
+    local disappeared = command.kind == "return_mail" and resolveError
+        and resolveError.code == "MAIL_MOVED"
+        or command.kind ~= "return_mail" and resolveError
+        and resolveError.code == "SOURCE_MISSING"
+    if not resolved and disappeared then
         self:_completeCommand(operation)
         return true
     end
@@ -532,7 +658,7 @@ function Queue:_explicitFailure(operation, errorObject)
     local command = operation.commands[operation.commandIndex]
     if not command then return end
     errorObject = errorObject or makeError("API_REJECTED", "收件操作失败")
-    errorObject.sourceKey = errorObject.sourceKey or command.sourceKey
+    errorObject.sourceKey = errorObject.sourceKey or commandKey(command)
     self:_finish(operation, "FAILED", errorObject)
 end
 
@@ -592,6 +718,9 @@ function Queue:OnWoWEvent(event, ...)
         -- 不等待邮件列表重新扫描后才确认来源消失；Titan 的刷新时序下必须如此才能连续领取。
         self:_completeCommand(operation)
         return true
+    elseif command.kind == "return_mail"
+        and (event == "MAIL_INBOX_UPDATE" or event == "MAIL_SUCCESS") then
+        return self:_confirmCurrent(operation)
     end
     return false
 end
@@ -607,7 +736,7 @@ function Queue:Tick(now)
     if self.activeId ~= operation.id or operation.state ~= "AWAITING_ACK" then return true end
     self:_finish(operation, "INDETERMINATE",
         makeError("RESULT_INDETERMINATE", "已提交领取请求，但无法确认最终结果",
-            false, command.sourceKey))
+            false, commandKey(command)))
     return true
 end
 

@@ -4,7 +4,7 @@
 
 ### 3.3.3 (2026-07-25)
 
-- 收件箱和邮包新增“可退 / 转寄”提示，方便及时处理不能再次退回的邮件，避免过期损失
+- 收件箱和邮包新增“可退 / 转寄”提示及“闪退”按钮，可在确认邮件、附件、金币和到期统计后批量退回当前可退邮件
 - 闪寄更加稳定：修复公会名单刷新问题，默认显示团队并隐藏自己，自定义组补充好友名单
 - 优化批量邮寄金额统计和确认窗口，清楚显示邮资与总支出，核对信息更方便
 
@@ -85,7 +85,7 @@
 
 ### 3.3.3 (2026-07-25)
 
-- Added clear Returnable / Forward indicators to the native inbox and Mail Bag so expiring mail is easier to handle safely
+- Added Returnable / Forward indicators and a confirmed bulk-return action to the native inbox and Mail Bag
 - Improved Bulk Mail stability, guild roster refreshes, Raid defaults, self filtering, and Friends access
 - Improved bulk-mail cost summaries and confirmation layout with clear postage and total spending
 

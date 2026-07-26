@@ -234,6 +234,15 @@ function Compat:TakeMoney(index)
     return value == nil and true or value
 end
 
+function Compat:ReturnMail(index)
+    if type(index) ~= "number" or index < 1 then
+        return nil, Mail:NewError("INVALID_MAIL_INDEX", "邮件索引无效。")
+    end
+    local value, err = invoke(self, "ReturnInboxItem", index)
+    if err then return nil, err end
+    return value == nil and true or value
+end
+
 function Compat:MarkRead(index)
     local value, err = invoke(self, "GetInboxText", index)
     if err then return nil, err end
