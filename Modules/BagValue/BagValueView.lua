@@ -9,6 +9,8 @@ View.__index = View
 
 local FRAME_WIDTH, FRAME_HEIGHT = 680, 500
 local ROW_COUNT, ROW_HEIGHT = 10, 27
+local VALUE_FONT_SIZE = 10
+local GOLD_ICON = "|TInterface\\MoneyFrame\\UI-GoldIcon:10:10:0:0|t"
 local COLUMN_DEFS = {
     { key = "name", label = "物品", x = 6, width = 246, justify = "LEFT" },
     { key = "count", label = "数量", x = 252, width = 54, justify = "RIGHT" },
@@ -25,10 +27,11 @@ local function createFrame(create, frameType, name, parent, template)
     return create(frameType, name, parent)
 end
 
-local function formatMoney(value)
+local function formatMoney(value, iconSize)
     value = math.max(0, math.floor(tonumber(value) or 0))
+    iconSize = math.max(8, math.floor(tonumber(iconSize) or 12))
     if _G and type(_G.GetCoinTextureString) == "function" then
-        local ok, text = pcall(_G.GetCoinTextureString, value, 12)
+        local ok, text = pcall(_G.GetCoinTextureString, value, iconSize)
         if ok and type(text) == "string" then return text end
     end
     return tostring(value) .. " 铜"
@@ -36,7 +39,7 @@ end
 
 local function formatGold(value)
     value = math.max(0, tonumber(value) or 0)
-    return string.format("%.2f 金币", value / 10000)
+    return string.format("%.2f %s", value / 10000, GOLD_ICON)
 end
 
 local function rowValue(row, key)
@@ -131,6 +134,9 @@ local function createSummaryMetric(parent, x, label)
     metric.value:SetPoint("TOPLEFT", parent, "TOPLEFT", x, -26)
     metric.value:SetSize(112, 20)
     metric.value:SetJustifyH("RIGHT")
+    metric.value:SetFont(_G.STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", VALUE_FONT_SIZE, "")
+    if metric.value.SetWordWrap then metric.value:SetWordWrap(false) end
+    if metric.value.SetMaxLines then metric.value:SetMaxLines(1) end
     return metric
 end
 
@@ -161,6 +167,10 @@ function View:_createRow(parent, index)
             text:SetSize(def.width - 7, ROW_HEIGHT)
             text:SetJustifyH(def.justify)
             text:SetWordWrap(false)
+            if def.key == "unitValue" or def.key == "totalValue" then
+                text:SetFont(_G.STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF", VALUE_FONT_SIZE, "")
+                if text.SetMaxLines then text:SetMaxLines(1) end
+            end
             row[def.key] = text
         end
     end
@@ -392,11 +402,11 @@ function View:Render(result, rows)
     self.rowOffset = 0
     if self.frame then
         local cards = self.frame.summaryCards
-        cards.total.value:SetText(formatMoney(self.summary.totalValue or self.summary.total))
-        cards.auction.value:SetText(formatMoney(self.summary.auctionValue or self.summary.auction))
-        cards.vendor.value:SetText(formatMoney(self.summary.vendorValue or self.summary.vendor))
+        cards.total.value:SetText(formatMoney(self.summary.totalValue or self.summary.total, 10))
+        cards.auction.value:SetText(formatMoney(self.summary.auctionValue or self.summary.auction, 10))
+        cards.vendor.value:SetText(formatMoney(self.summary.vendorValue or self.summary.vendor, 10))
         cards.disenchant.value:SetText(formatMoney(
-            self.summary.disenchantValue or self.summary.disenchant))
+            self.summary.disenchantValue or self.summary.disenchant, 10))
         cards.unpriced.value:SetText(tostring(math.max(0, tonumber(self.summary.unpricedCount) or 0)) .. " 项")
     end
     self:_refreshRows()
