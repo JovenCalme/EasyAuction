@@ -8,6 +8,7 @@
 - 新增“背包估值”，按价格库扫描价、卖店价和分解价值汇总当前背包，并列出高价值及无价格物品
 - 优化背包估值金额与入口布局，可从价格库和待售库存快速打开
 - 背包新增估值图标，指向估值入口可快速查看总额和高价值物品
+- 邮寄记录现在会保存普通和批量邮件，金额与邮资改用金银铜图标显示
 
 ### 3.3.4 (2026-07-26)
 
@@ -101,6 +102,7 @@
 - Added Bag Valuation using scan, vendor, and disenchant values, with high-value and unpriced item details
 - Improved Bag Valuation amounts and entry layout, with access from the price database and sell inventory panel
 - Added a bag valuation icon and compact hover summary with totals and top-value items
+- Mail history now includes regular and bulk mail, with coin icons for amounts and postage
 
 ### 3.3.4 (2026-07-26)
 

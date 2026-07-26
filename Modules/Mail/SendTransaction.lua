@@ -35,6 +35,7 @@ function SendTransaction.New(deps)
         arbiter = deps.arbiter,
         attachmentService = deps.attachmentService,
         recipientRepository = deps.recipientRepository,
+        historyRepository = deps.historyRepository,
         generation = deps.generation or function() return 0 end,
         idFactory = deps.idFactory,
         now = deps.now or _G.GetTime or os.time,
@@ -51,6 +52,7 @@ function SendTransaction.New(deps)
         ownsLease = false,
         dispatched = false,
         recentRecorded = false,
+        historyRecorded = false,
     }, SendTransaction)
 end
 
@@ -89,6 +91,22 @@ function SendTransaction:_release(outcome, err)
     self.ownsLease = false
 end
 
+function SendTransaction:_recordHistory(state, err)
+    if self.historyRecorded or not self.dispatched or self.policy.recordHistory == false
+        or self.policy.ownerKind == "BULK_SEND" then return end
+    self.historyRecorded = true
+    if not self.historyRepository or not self.historyRepository.RecordSingle then return end
+    self.historyRepository:RecordSingle({
+        sourceKind = "single",
+        recipient = self.draft.recipient,
+        state = state,
+        subject = self.draft.subject,
+        amount = self.draft.money,
+        postage = self.postage,
+        error = err,
+    })
+end
+
 function SendTransaction:_terminal(state, err)
     if TERMINAL[self.state] then return false end
     self:_cancelTimer()
@@ -96,6 +114,7 @@ function SendTransaction:_terminal(state, err)
     self.error = err
     self.finishedAt = self.now()
     self:_release(state, err)
+    self:_recordHistory(state, err)
     if state == "SUCCEEDED" and not self.recentRecorded and self.policy.recordRecent ~= false
         and self.recipientRepository and self.recipientRepository.RecordSent then
         self.recipientRepository:RecordSent(self.draft.recipient)
@@ -168,6 +187,7 @@ function SendTransaction:Begin(draft, policy)
     self.error = nil
     self.dispatched = false
     self.recentRecorded = false
+    self.historyRecorded = false
     self.startedAt = self.now()
 
     local valid, errors = self:Validate(self.draft)
@@ -176,6 +196,8 @@ function SendTransaction:Begin(draft, policy)
         self.error = errors[1]
         return nil, errors[1]
     end
+    self.postage = self.compat.GetSendPrice
+        and math.max(0, math.floor(tonumber(self.compat:GetSendPrice()) or 0)) or 0
 
     if type(self.draft.attachments) == "table" and #self.draft.attachments > 0
         and self.attachmentService and not self.policy.attachmentsAlreadyPrepared then

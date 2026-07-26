@@ -105,6 +105,10 @@ function ComposeRuntime:_ensureServices()
     if not recipients then recipients, groups = Mail:EnsureRecipientServices() end
     self.recipients = recipients
     self.groups = groups or self.deps.recipientGroupRepository
+    if not self.history then
+        self.history = self.deps.historyRepository
+            or (Mail.EnsureHistoryRepository and Mail:EnsureHistoryRepository())
+    end
     if not self.suggestions and Mail.RecipientSuggestions then
         self.suggestions = Mail.RecipientSuggestions.New({ recipientRepository = self.recipients })
     end
@@ -458,6 +462,7 @@ function ComposeRuntime:_applyRecipientBlacklistGuard(recipientBox, skipRefresh)
     if blocked then
         if button and button.Disable then button:Disable() end
         self.pendingNativeRecipient = nil
+        self.pendingNativeMail = nil
         self:_setStatus("该收件人已在黑名单，请先解除后再发送", true)
     elseif self.recipientWasBlacklisted and not skipRefresh then
         local compat = self:_compat()
@@ -1154,8 +1159,23 @@ function ComposeRuntime:_installHooks(recipientBox)
             nativeSend:HookScript("OnClick", function()
                 if self.enabled and recipientBox:GetText() ~= ""
                     and not self:_recipientIsBlacklisted(recipientBox:GetText()) then
-                    self.pendingNativeRecipient = self.recipients
+                    local recipient = self.recipients
                         and self.recipients:Normalize({ name = recipientBox:GetText() }, "recent")
+                    self.pendingNativeRecipient = recipient
+                    local compat = self:_compat()
+                    local snapshot = compat and compat.GetOutgoingSnapshot
+                        and compat:GetOutgoingSnapshot() or nil
+                    if recipient and snapshot then
+                        self.pendingNativeMail = {
+                            sourceKind = "single",
+                            recipient = recipient,
+                            subject = snapshot.subject,
+                            amount = snapshot.money,
+                            postage = compat.GetSendPrice and compat:GetSendPrice() or 0,
+                        }
+                    else
+                        self.pendingNativeMail = nil
+                    end
                 end
             end)
         end
@@ -1206,6 +1226,7 @@ function ComposeRuntime:_transactionFromSnapshot(snapshot)
     if not recipient then return nil, err end
     local transaction = Mail.SendTransaction.New({
         compat = self:_compat(), arbiter = self:_arbiter(), recipientRepository = self.recipients,
+        historyRepository = self.history,
         generation = function() return self:_sessionGeneration() end,
         onTimeout = function(result)
             self:_setStatus(result.error and result.error.message or "等待发送结果超时", true)
@@ -1234,6 +1255,16 @@ function ComposeRuntime:SendCurrentDraft()
     return sent, sendError
 end
 
+function ComposeRuntime:_recordPendingNativeMail(state, err)
+    local pending = self.pendingNativeMail
+    self.pendingNativeMail = nil
+    if not pending or not self.history or not self.history.RecordSingle then return false end
+    pending.state = state
+    pending.error = err
+    self.history:RecordSingle(pending)
+    return true
+end
+
 function ComposeRuntime:OnSendEvent(event, ...)
     local transactionHandled = false
     if self.transaction then
@@ -1254,9 +1285,11 @@ function ComposeRuntime:OnSendEvent(event, ...)
         and self.pendingNativeRecipient and self.recipients then
         local recipient = self.pendingNativeRecipient
         self.recipients:RecordSent(recipient)
+        self:_recordPendingNativeMail("SUCCEEDED")
         self.pendingNativeRecipient = nil
         self:_restoreRecipientAfterSuccess(recipient)
     elseif event == "MAIL_FAILED" then
+        self:_recordPendingNativeMail("FAILED", { code = "MAIL_FAILED", message = "邮件发送失败" })
         self.pendingNativeRecipient = nil
     end
 end
@@ -1335,6 +1368,10 @@ function ComposeRuntime:OnSessionStop()
     if self.groupManager then self.groupManager:Hide() end
     if self.attachments then self.attachments:OnSessionClosed() end
     self.lastAttachmentAutoSend = nil
+    self:_recordPendingNativeMail("UNKNOWN", {
+        code = "INTERRUPTED_UNKNOWN", message = "邮箱关闭前未收到明确发送结果",
+    })
+    self.pendingNativeRecipient = nil
     if self.transaction then
         local state = self.transaction:GetState()
         local terminal = state == "SUCCEEDED" or state == "FAILED" or state == "UNKNOWN" or state == "CANCELLED"

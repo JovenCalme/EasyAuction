@@ -128,6 +128,53 @@ function BulkHistoryRepository:Create(record)
     return true
 end
 
+function BulkHistoryRepository:RecordSingle(record)
+    record = record or {}
+    self.nextSingleId = (self.nextSingleId or 0) + 1
+    local timestamp = tonumber(self.now()) or 0
+    local id = string.format("single-%d-%d", timestamp, self.nextSingleId)
+    while self.storage.byId[id] do
+        self.nextSingleId = self.nextSingleId + 1
+        id = string.format("single-%d-%d", timestamp, self.nextSingleId)
+    end
+    local recipient = type(record.recipient) == "table" and record.recipient or {
+        name = tostring(record.recipient or ""),
+        sendName = tostring(record.recipient or ""),
+    }
+    local state = record.state or "UNKNOWN"
+    local err = record.error
+    local created, createError = self:Create({
+        id = id,
+        senderKey = record.senderKey,
+        realmFactionKey = record.realmFactionKey,
+        sourceKind = "single",
+        startedAt = timestamp,
+        finishedAt = timestamp,
+        state = state == "SUCCEEDED" and "COMPLETED" or "PARTIAL",
+        amountEach = record.amount,
+        postageEstimate = record.postage,
+        subject = record.subject,
+        recipients = {
+            {
+                itemId = id .. ":1",
+                recipientKey = recipient.recipientKey or recipient.sendName or recipient.name,
+                displayName = recipient.displayName or recipient.name or recipient.sendName,
+                sendName = recipient.sendName or recipient.name,
+                state = state,
+                attemptCount = 1,
+                amount = record.amount,
+                postage = record.postage,
+                startedAt = timestamp,
+                finishedAt = timestamp,
+                errorCode = err and err.code,
+                errorMessage = err and err.message,
+            },
+        },
+    })
+    if not created then return nil, createError end
+    return id
+end
+
 function BulkHistoryRepository:UpdateItem(batchId, itemId, patch)
     local record = self.storage.byId[batchId]
     if not record then return nil, newError("BATCH_NOT_FOUND", "找不到批量邮寄记录") end
@@ -255,3 +302,19 @@ function BulkHistoryRepository:RecoverInterrupted()
 end
 
 Mail.BulkHistoryRepository = BulkHistoryRepository
+
+function Mail:EnsureHistoryRepository()
+    local config = self.Config and self.Config:GetMailConfig() or nil
+    if not config or not config.bulkHistory or not self.BulkHistoryRepository then return nil end
+    if self.HistoryRepository and self.HistoryRepository.storage == config.bulkHistory then
+        return self.HistoryRepository
+    end
+    self.HistoryRepository = self.BulkHistoryRepository.New({
+        storage = config.bulkHistory,
+        maxBatches = config.bulk.historyMaxBatches,
+        maxRecipientEntries = config.bulk.historyMaxRecipientEntries,
+        maxAgeDays = config.bulk.historyMaxAgeDays,
+    })
+    self.HistoryRepository:RecoverInterrupted()
+    return self.HistoryRepository
+end

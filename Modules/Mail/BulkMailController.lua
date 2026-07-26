@@ -58,14 +58,10 @@ function BulkMailController:_ensureServices()
     end
 
     if not self.history then
-        self.history = self.deps.historyRepository or Mail.BulkHistoryRepository.New({
-            storage = config.bulkHistory,
-            maxBatches = config.bulk.historyMaxBatches,
-            maxRecipientEntries = config.bulk.historyMaxRecipientEntries,
-            maxAgeDays = config.bulk.historyMaxAgeDays,
-        })
-        self.history:RecoverInterrupted()
+        self.history = self.deps.historyRepository
+            or (Mail.EnsureHistoryRepository and Mail:EnsureHistoryRepository())
     end
+    if not self.history then return nil, newError("MAIL_HISTORY_UNAVAILABLE", "邮寄记录仓储尚未初始化") end
     if not self.groupProvider then
         local realm = Mail.GetCurrentRecipientRealm and Mail.GetCurrentRecipientRealm(_G)
             or (_G.GetRealmName and _G.GetRealmName() or "")

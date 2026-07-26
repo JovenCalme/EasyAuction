@@ -48,6 +48,7 @@ local HISTORY_SOURCE_LABEL = {
     party = "小队",
     guild = "公会",
     custom = "自定",
+    single = "普通",
 }
 
 local function formatBatchTitle(record, timestamp)
@@ -662,6 +663,9 @@ end
 
 function BulkMailView:ConfirmRetryFailed()
     if not self.selectedHistoryId or not self.deps.onPrepareRetryFailed then return false end
+    local selected = self.deps.historyRepository
+        and self.deps.historyRepository:Get(self.selectedHistoryId) or nil
+    if selected and selected.sourceKind == "single" then return false end
     local plan, err = self.deps.onPrepareRetryFailed(self.selectedHistoryId)
     if not plan then self:ShowError(err) return nil, err end
     local names = {}
@@ -708,7 +712,7 @@ function BulkMailView:_createHistoryPanel(frame, createFrame)
     frame.historyPanel = panel
     panel.title = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     panel.title:SetPoint("TOPLEFT", 10, -4)
-    panel.title:SetText("批次记录")
+    panel.title:SetText("邮寄记录")
     panel.detailTitle = panel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     panel.detailTitle:SetPoint("TOPLEFT", 276, -4)
     panel.detailTitle:SetText("发送结果")
@@ -735,10 +739,10 @@ function BulkMailView:_createHistoryPanel(frame, createFrame)
     panel.detailListFrame:SetPoint("TOPLEFT", panel, "TOPLEFT", 270, -24)
     panel.batchEmpty = panel.batchListFrame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     panel.batchEmpty:SetPoint("CENTER", panel.batchListFrame, "CENTER", 0, 0)
-    panel.batchEmpty:SetText("暂无批量邮寄记录")
+    panel.batchEmpty:SetText("暂无邮寄记录")
     panel.detailEmpty = panel.detailListFrame:CreateFontString(nil, "OVERLAY", "GameFontDisable")
     panel.detailEmpty:SetPoint("CENTER", panel.detailListFrame, "CENTER", 0, 0)
-    panel.detailEmpty:SetText("选择左侧批次查看逐人结果")
+    panel.detailEmpty:SetText("选择左侧记录查看发送结果")
     panel.batchRows, panel.detailRows = {}, {}
     for index = 1, 10 do
         local row = createFrame("Button", nil, panel.batchListFrame, "BackdropTemplate")
@@ -876,9 +880,13 @@ function BulkMailView:RefreshHistory()
         end
     end
     local results = selected and selected.recipients or {}
-    self.frame.historyPanel.detailEmpty:SetText(selected and "该批次暂无收件人结果"
-        or "选择左侧批次查看逐人结果")
+    self.frame.historyPanel.detailEmpty:SetText(selected and "该记录暂无发送结果"
+        or "选择左侧记录查看发送结果")
     self.frame.historyPanel.detailEmpty:SetShown(#results == 0)
+    local retryable = selected and selected.sourceKind ~= "single"
+        and (tonumber(selected.failedCount) or 0) > 0
+    if retryable then self.frame.historyPanel.retry:Enable()
+    else self.frame.historyPanel.retry:Disable() end
     for index = 1, #self.frame.historyPanel.detailRows do
         local row, result = self.frame.historyPanel.detailRows[index], results[self.historyDetailOffset + index]
         if result then
@@ -888,8 +896,8 @@ function BulkMailView:RefreshHistory()
             row.status:SetText(STATUS_TEXT[result.state] or result.state or "")
             local statusColor = STATUS_COLOR[result.state]
             if statusColor then row.status:SetTextColor(statusColor[1], statusColor[2], statusColor[3]) end
-            row.amount:SetText(string.format("%d铜", result.amount or 0))
-            row.postage:SetText("邮资" .. (result.postage and tostring(result.postage) or "-"))
+            row.amount:SetText(formatMoney(result.amount or 0))
+            row.postage:SetText(result.postage ~= nil and ("邮资" .. formatMoney(result.postage)) or "邮资-")
         else
             row.result = nil
             row.name:SetText("")
