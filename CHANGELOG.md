@@ -2,6 +2,11 @@
 
 ## 简体中文
 
+### 3.3.4 (2026-07-26)
+
+- 新增“闪退”，确认统计后可批量退回当前可退邮件
+- “可退 / 转寄”提示更清爽，只提醒真正需要处理的邮件
+
 ### 3.3.3 (2026-07-25)
 
 - 收件箱和邮包新增“可退 / 转寄”提示及“闪退”按钮，可在确认邮件、附件、金币和到期统计后批量退回当前可退邮件
@@ -82,6 +87,11 @@
 ---
 
 ## English
+
+### 3.3.4 (2026-07-26)
+
+- Added Flash Return to confirm and return all currently returnable mail in one batch
+- Reduced Returnable / Forward labels to mail that actually needs attention
 
 ### 3.3.3 (2026-07-25)
 

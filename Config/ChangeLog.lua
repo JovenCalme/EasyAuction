@@ -1,4 +1,4 @@
-local ADDON_VERSION = "3.3.3"
+local ADDON_VERSION = "3.3.4"
 local EAStyle = _G.EasyAuctionStyle
 
 local function EA_ChangelogSkinFrame(frame, role)
@@ -70,6 +70,14 @@ local function EA_ChangelogLine(parent, alpha)
 end
 
 local UPDATE_NOTES = {
+    {
+        version = "3.3.4",
+        date = "2026-07-26",
+        note = [[
+- 新增“闪退”，确认统计后可批量退回当前可退邮件。
+- “可退 / 转寄”提示更清爽，只提醒真正需要处理的邮件。
+]],
+    },
     {
         version = "3.3.3",
         date = "2026-07-25",
