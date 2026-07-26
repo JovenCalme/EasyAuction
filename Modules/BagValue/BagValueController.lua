@@ -126,11 +126,10 @@ function Controller:Show()
         return nil, err
     end
     if type(self.view.Show) == "function" then self.view:Show() end
-    if self.dirty or not self.result then
-        self:RefreshNow("SHOW")
-        -- 首次显示时价格库可能仍在完成初始化，延迟再扫一次补齐拍卖价。
-        self:RequestRefresh("SHOW_READY", 0.2)
-    end
+    -- Tooltip 可能已先生成缓存，但新窗口仍需主动渲染并刷新一次。
+    self:RefreshNow("SHOW")
+    -- 首次显示时价格库可能仍在完成初始化，延迟再扫一次补齐拍卖价。
+    self:RequestRefresh("SHOW_READY", 0.2)
     return true
 end
 
