@@ -184,6 +184,9 @@ function Settings:RefreshControls()
     if controls.autoSendToggle and controls.autoSendToggle.SetChecked then
         controls.autoSendToggle:SetChecked(self:GetComposeOption("autoSend"))
     end
+    if controls.autoFillRecipientToggle and controls.autoFillRecipientToggle.SetChecked then
+        controls.autoFillRecipientToggle:SetChecked(self:GetComposeOption("autoFillRecipient"))
+    end
     local state = self:GetRuntimeStatus()
     if controls.toggle and controls.toggle.SetEnabled then
         controls.toggle:SetEnabled(state ~= Mail.RuntimeState.ENABLING
@@ -206,6 +209,9 @@ function Settings:RefreshControls()
         controls.autoSendToggle:SetEnabled(featureControlsEnabled
             and self:GetComposeOption("enableAltClick"))
     end
+    if controls.autoFillRecipientToggle and controls.autoFillRecipientToggle.SetEnabled then
+        controls.autoFillRecipientToggle:SetEnabled(featureControlsEnabled)
+    end
     local external = self:GetExternalStatus()
     local text = STATUS_TEXT[state] or state
     if external.anyLoaded and state ~= Mail.RuntimeState.WAITING_CONFLICT_DECISION then
@@ -222,18 +228,18 @@ function Settings:CreateControls(parent, options)
     end
     if self.controls then return self.controls.container end
     local container = _G.CreateFrame("Frame", nil, parent, "BackdropTemplate")
-    container:SetSize(options.width or 300, options.height or (options.compact and 38 or 160))
+    container:SetSize(options.width or 300, options.height or (options.compact and 48 or 252))
     if options.point then container:SetPoint(unpack(options.point)) end
     local title = container:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     title:SetPoint("TOPLEFT", options.compact and 8 or 12, options.compact and -4 or -10)
     title:SetText(options.compact and "邮箱" or "邮箱功能")
     local style = _G.EasyAuctionStyle
     if style and type(style.SkinText) == "function" then style:SkinText(title, "accent") end
-    local function createToggle(labelText, compactX, expandedY, onClick)
+    local function createToggle(labelText, compactX, expandedY, onClick, compactY)
         local button = _G.CreateFrame("CheckButton", nil, container, "UICheckButtonTemplate")
         button:SetSize(20, 20)
         if options.compact then
-            button:SetPoint("TOPLEFT", container, "TOPLEFT", compactX, -1)
+            button:SetPoint("TOPLEFT", container, "TOPLEFT", compactX, compactY or -1)
         else
             button:SetPoint("TOPLEFT", container, "TOPLEFT", 12, expandedY)
         end
@@ -283,6 +289,12 @@ function Settings:CreateControls(parent, options)
         local ok = self:SetComposeOption("autoSend", requested)
         if not ok then button:SetChecked(self:GetComposeOption("autoSend")) end
     end)
+    local autoFillRecipientToggle = createToggle(options.compact and "上次" or "记住上个收件人",
+        44, -192, function(button)
+        local requested = button:GetChecked() == true
+        local ok = self:SetComposeOption("autoFillRecipient", requested)
+        if not ok then button:SetChecked(self:GetComposeOption("autoFillRecipient")) end
+    end, -25)
     local function setHelp(button, titleText, bodyText)
         button:SetScript("OnEnter", function()
             if not _G.GameTooltip then return end
@@ -299,13 +311,15 @@ function Settings:CreateControls(parent, options)
         "开启后，Alt+左键点击背包物品可将其放入当前邮件。")
     setHelp(autoSendToggle, "Alt 点击后自动发送",
         "附件确认成功且收件人不为空时，自动发送当前邮件。")
+    setHelp(autoFillRecipientToggle, "记住上个收件人",
+        "发送成功后自动保留该收件人，方便连续给同一角色邮寄。")
     local status = container:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
     if options.compact then
-        status:SetPoint("TOPLEFT", container, "TOPLEFT", 8, -24)
+        status:SetPoint("TOPLEFT", container, "TOPLEFT", 108, -28)
     else
-        status:SetPoint("TOPLEFT", container, "TOPLEFT", 12, -196)
+        status:SetPoint("TOPLEFT", container, "TOPLEFT", 12, -224)
     end
-    status:SetWidth((options.width or 300) - 16)
+    status:SetWidth((options.width or 300) - (options.compact and 116 or 16))
     status:SetJustifyH("LEFT")
     status:SetWordWrap(not options.compact)
     status:SetText("")
@@ -316,6 +330,7 @@ function Settings:CreateControls(parent, options)
         bulkToggle = bulkToggle,
         enableAltClickToggle = enableAltClickToggle,
         autoSendToggle = autoSendToggle,
+        autoFillRecipientToggle = autoFillRecipientToggle,
         status = status,
     }
     Mail:Subscribe("MAIL_MODULE_STATE_CHANGED", self, function() self:RefreshControls() end)
@@ -331,7 +346,7 @@ function Settings:AttachToEasyAuctionConfig()
     if not page then return false end
     local container, err = self:CreateControls(page, {
         width = modernPage and 402 or 304,
-        height = modernPage and 220 or 38,
+        height = modernPage and 252 or 48,
         compact = not modernPage,
         point = { "TOPLEFT", page, "TOPLEFT", 0, modernPage and -18 or -528 },
     })

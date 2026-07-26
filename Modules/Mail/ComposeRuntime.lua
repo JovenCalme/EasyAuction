@@ -81,6 +81,25 @@ function ComposeRuntime:_config()
     }
 end
 
+function ComposeRuntime:_restoreRecipientAfterSuccess(recipient)
+    if not self:_config().autoFillRecipient then return false end
+    local sendName = type(recipient) == "table" and (recipient.sendName or recipient.name) or recipient
+    if type(sendName) ~= "string" or sendName == "" then return false end
+    local function restore()
+        if not self.enabled or not self:_config().autoFillRecipient then return end
+        local recipientBox = self.deps.recipientBox or _G.SendMailNameEditBox
+        if recipientBox and recipientBox:GetText() == "" then recipientBox:SetText(sendName) end
+    end
+    if self.deps.scheduleFrame then
+        self.deps.scheduleFrame(restore)
+    elseif _G.C_Timer and _G.C_Timer.After then
+        _G.C_Timer.After(0, restore)
+    else
+        restore()
+    end
+    return true
+end
+
 function ComposeRuntime:_ensureServices()
     local recipients, groups = self.deps.recipientRepository, self.deps.recipientGroupRepository
     if not recipients then recipients, groups = Mail:EnsureRecipientServices() end
@@ -1216,17 +1235,27 @@ function ComposeRuntime:SendCurrentDraft()
 end
 
 function ComposeRuntime:OnSendEvent(event, ...)
+    local transactionHandled = false
     if self.transaction then
-        self.transaction:OnSendEvent(event, ...)
+        transactionHandled = self.transaction:OnSendEvent(event, ...) == true
         local state = self.transaction:GetState()
-        if state == "SUCCEEDED" then self:_setStatus("发送成功", false)
+        if state == "SUCCEEDED" then
+            self:_setStatus("发送成功", false)
+            if transactionHandled then
+                local snapshot = self.transaction:GetSnapshot()
+                self:_restoreRecipientAfterSuccess(snapshot.draft and snapshot.draft.recipient)
+            end
         elseif state == "FAILED" or state == "UNKNOWN" then
             local snapshot = self.transaction:GetSnapshot()
             self:_setStatus(snapshot.error and snapshot.error.message or state, true)
         elseif state == "WAITING_SECURE_CONFIRM" then self:_setStatus("等待原生安全转账确认", true) end
-    elseif event == "MAIL_SEND_SUCCESS" and self.pendingNativeRecipient and self.recipients then
-        self.recipients:RecordSent(self.pendingNativeRecipient)
+    end
+    if event == "MAIL_SEND_SUCCESS" and not transactionHandled
+        and self.pendingNativeRecipient and self.recipients then
+        local recipient = self.pendingNativeRecipient
+        self.recipients:RecordSent(recipient)
         self.pendingNativeRecipient = nil
+        self:_restoreRecipientAfterSuccess(recipient)
     elseif event == "MAIL_FAILED" then
         self.pendingNativeRecipient = nil
     end

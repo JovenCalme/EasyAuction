@@ -91,6 +91,7 @@ local function normalizeConfig(mail)
         mail.bulk.historyMaxRecipientEntries, 5000, 1, 20000)
     mail.bulk.historyMaxAgeDays = clampInteger(mail.bulk.historyMaxAgeDays, 90, 1, 365)
     mail.recipients.recentLimit = clampInteger(mail.recipients.recentLimit, 20, 1, 100)
+    if type(mail.compose.autoFillRecipient) ~= "boolean" then mail.compose.autoFillRecipient = true end
     if type(mail.compose.enableAltClick) ~= "boolean" then mail.compose.enableAltClick = false end
     if type(mail.compose.autoSend) ~= "boolean" then mail.compose.autoSend = false end
     if mail.compose.bulkMatchMode ~= "EXACT_ID" then mail.compose.bulkMatchMode = "EXACT_ID" end
@@ -324,7 +325,7 @@ function Config:SetEnabled(enabled)
 end
 
 local FEATURE_SECTIONS = { inbox = true, bulk = true }
-local COMPOSE_OPTIONS = { enableAltClick = true, autoSend = true }
+local COMPOSE_OPTIONS = { autoFillRecipient = true, enableAltClick = true, autoSend = true }
 
 function Config:GetFeatureEnabled(feature)
     if not FEATURE_SECTIONS[feature] then return false end
