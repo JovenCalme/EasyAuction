@@ -126,7 +126,11 @@ function Controller:Show()
         return nil, err
     end
     if type(self.view.Show) == "function" then self.view:Show() end
-    if self.dirty or not self.result then self:RefreshNow("SHOW") end
+    if self.dirty or not self.result then
+        self:RefreshNow("SHOW")
+        -- 首次显示时价格库可能仍在完成初始化，延迟再扫一次补齐拍卖价。
+        self:RequestRefresh("SHOW_READY", 0.2)
+    end
     return true
 end
 
