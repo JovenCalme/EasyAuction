@@ -57,6 +57,7 @@ local function readContainerInfo(api, bag, slot)
             quality = info.quality,
             icon = info.iconFileID or info.icon,
             bound = info.isBound == true or info.bound == true,
+            boundKnown = info.isBound ~= nil or info.bound ~= nil,
         }
     end
 
@@ -71,6 +72,7 @@ local function readContainerInfo(api, bag, slot)
         quality = values[4],
         icon = values[1],
         bound = values[11] == true,
+        boundKnown = values[11] ~= nil,
     }
 end
 
@@ -156,7 +158,7 @@ function Scanner:Scan()
                     snapshot.unresolvedCount = snapshot.unresolvedCount + 1
                     snapshot.totalCount = snapshot.totalCount + count
                 elseif count > 0 then
-                    if not slotItem.bound and type(api.IsBound) == "function" then
+                    if not slotItem.boundKnown and type(api.IsBound) == "function" then
                         slotItem.bound = api.IsBound(bag, slot, slotItem) == true
                     end
                     local item = byItemID[slotItem.itemID]
