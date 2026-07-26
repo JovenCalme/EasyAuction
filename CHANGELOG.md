@@ -2,6 +2,11 @@
 
 ## 简体中文
 
+### 3.3.6 (2026-07-26)
+
+- 新增“背包估值”，汇总背包物品的拍卖、卖店和分解价值，并提供明细与悬停统计
+- 扩展“邮寄记录”，普通和批量邮件均可保存发送结果，带附件邮件会显示物品清单
+
 ### 3.3.5 (2026-07-26)
 
 - 发件箱新增“记住上个收件人”，发送成功后自动保留名字，连续邮寄更省事
@@ -100,6 +105,11 @@
 ---
 
 ## English
+
+### 3.3.6 (2026-07-26)
+
+- Added Bag Valuation with auction, vendor, and disenchant totals, details, and hover summaries
+- Expanded Mail History to cover regular and bulk mail, including item lists for attachment mail
 
 ### 3.3.5 (2026-07-26)
 

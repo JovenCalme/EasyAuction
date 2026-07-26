@@ -9,8 +9,8 @@ View.__index = View
 
 local FRAME_WIDTH, FRAME_HEIGHT = 680, 500
 local ROW_COUNT, ROW_HEIGHT = 10, 27
-local VALUE_FONT_SIZE = 12
-local GOLD_ICON = "|TInterface\\MoneyFrame\\UI-GoldIcon:12:12:0:0|t"
+local VALUE_FONT_SIZE = 10
+local GOLD_ICON = "|TInterface\\MoneyFrame\\UI-GoldIcon:10:10:0:0|t"
 local COLUMN_DEFS = {
     { key = "name", label = "物品", x = 6, width = 246, justify = "LEFT" },
     { key = "count", label = "数量", x = 252, width = 54, justify = "RIGHT" },

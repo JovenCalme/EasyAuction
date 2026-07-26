@@ -1,4 +1,4 @@
-local ADDON_VERSION = "3.3.5"
+local ADDON_VERSION = "3.3.6"
 local EAStyle = _G.EasyAuctionStyle
 
 local function EA_ChangelogSkinFrame(frame, role)
@@ -70,6 +70,14 @@ local function EA_ChangelogLine(parent, alpha)
 end
 
 local UPDATE_NOTES = {
+    {
+        version = "3.3.6",
+        date = "2026-07-26",
+        note = [[
+- 新增“背包估值”，汇总背包物品的拍卖、卖店和分解价值，并提供明细与悬停统计。
+- 扩展“邮寄记录”，普通和批量邮件均可保存发送结果，带附件邮件会显示物品清单。
+]],
+    },
     {
         version = "3.3.5",
         date = "2026-07-26",
