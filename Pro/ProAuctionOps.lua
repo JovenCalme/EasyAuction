@@ -179,7 +179,8 @@ local function NormalizeHistoryRecord(row, fallbackTime)
     if count < 1 then
         count = 1
     end
-    local observedAt = tonumber(row.time or row[1] or row.timestamp or row.observedAt or row.updatedAt or row.lastUpdated)
+    local observedAt = tonumber(row.time or row.t or row[1] or row.timestamp or row.observedAt
+        or row.updatedAt or row.lastUpdated)
     if not observedAt and fallbackTime then
         observedAt = fallbackTime
     end
@@ -195,7 +196,8 @@ local function SelectHistoryRecord(history)
         return nil, nil, 0
     end
     local rows = type(history.records) == "table" and history.records or history
-    local fallbackTime = tonumber(history.updatedAt or history.lastUpdated or history.time or history.timestamp or history.observedAt)
+    local fallbackTime = tonumber(history.updatedAt or history.lastUpdated or history.time
+        or history.t or history.lastScanT or history.timestamp or history.observedAt)
     local freshest, cheapest, seen = nil, nil, 0
     for _, row in ipairs(rows) do
         local entry = NormalizeHistoryRecord(row, fallbackTime)
