@@ -9,7 +9,7 @@
 - 优化背包估值金额与入口布局，可从价格库和待售库存快速打开
 - 背包新增估值图标，指向估值入口可快速查看总额和高价值物品
 - 邮寄记录现在会保存普通和批量邮件，金额与邮资改用金银铜图标显示
-- 带附件的邮寄记录新增物品清单，清楚显示图标、名称、itemID 和数量
+- 带附件的邮寄记录新增简洁物品清单，清楚显示图标、名称和数量
 
 ### 3.3.4 (2026-07-26)
 
@@ -104,7 +104,7 @@
 - Improved Bag Valuation amounts and entry layout, with access from the price database and sell inventory panel
 - Added a bag valuation icon and compact hover summary with totals and top-value items
 - Mail history now includes regular and bulk mail, with coin icons for amounts and postage
-- Mail records with attachments now show item icons, names, item IDs, and quantities
+- Mail records with attachments now show a clean list of item icons, names, and quantities
 
 ### 3.3.4 (2026-07-26)
 
