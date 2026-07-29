@@ -1,4 +1,4 @@
-local ADDON_VERSION = "3.3.6"
+local ADDON_VERSION = "3.3.7"
 local EAStyle = _G.EasyAuctionStyle
 
 local function EA_ChangelogSkinFrame(frame, role)
@@ -70,6 +70,13 @@ local function EA_ChangelogLine(parent, alpha)
 end
 
 local UPDATE_NOTES = {
+    {
+        version = "3.3.7",
+        date = "2026-07-29",
+        note = [[
+- 邮件详情页新增“收信”按钮，可一键收取当前邮件内的全部物品和钱币；付款取件邮件仍保留原生逐件确认。
+]],
+    },
     {
         version = "3.3.6",
         date = "2026-07-26",

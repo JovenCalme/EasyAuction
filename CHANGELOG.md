@@ -2,6 +2,10 @@
 
 ## 简体中文
 
+### 3.3.7 (2026-07-29)
+
+- 邮件详情页新增“收信”按钮，可一键收取当前邮件内的全部物品和钱币；付款取件邮件仍保留原生逐件确认
+
 ### 3.3.6 (2026-07-26)
 
 - 新增“背包估值”，汇总背包物品的拍卖、卖店和分解价值，并提供明细与悬停统计
@@ -105,6 +109,10 @@
 ---
 
 ## English
+
+### 3.3.7 (2026-07-29)
+
+- Added a Collect button to the mail detail view to take all items and money from the current message while keeping COD confirmation in Blizzard's native flow
 
 ### 3.3.6 (2026-07-26)
 
