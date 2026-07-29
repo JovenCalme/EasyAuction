@@ -181,6 +181,7 @@ function Controller.New(deps)
         ownsView = false,
         returnCount = 0,
         returnBusy = false,
+        nativeTakeBusy = false,
     }, Controller)
 end
 
@@ -277,6 +278,41 @@ function Controller:_ensureNativeReturnButton()
     return button
 end
 
+function Controller:_ensureNativeTakeButton()
+    if self.nativeTakeButton then return self.nativeTakeButton end
+    local parent = _G and _G.OpenMailFrame
+    local replyButton = _G and _G.OpenMailReplyButton
+    local createFrame = self.deps.createFrame or (_G and _G.CreateFrame)
+    if not parent or not replyButton or type(createFrame) ~= "function" then return nil end
+    local button = createFrame("Button", "EasyAuctionOpenMailTakeButton", parent,
+        "UIPanelButtonTemplate")
+    button:SetSize(82, 22)
+    button:SetPoint("RIGHT", replyButton, "LEFT", 0, 0)
+    button:SetText("收信")
+    button:SetScript("OnClick", function() self:RequestTakeOpenMail() end)
+    button:Disable()
+    self.nativeTakeButton = button
+    return button
+end
+
+function Controller:RefreshNativeTakeButton()
+    local button = self:_ensureNativeTakeButton()
+    if not button then return false end
+    local mailIndex = tonumber(_G and _G.InboxFrame and _G.InboxFrame.openMailID)
+    local canTake = self.enabled and self.active and not self.nativeTakeBusy
+        and mailIndex and mailIndex > 0
+    if canTake then
+        local compat = self:_compat()
+        local header = compat and type(compat.GetHeader) == "function"
+            and compat:GetHeader(mailIndex) or nil
+        canTake = header ~= nil
+            and (tonumber(header.cod) or 0) <= 0
+            and ((tonumber(header.itemCount) or 0) > 0 or (tonumber(header.money) or 0) > 0)
+    end
+    if canTake then button:Enable() else button:Disable() end
+    return canTake == true
+end
+
 function Controller:_setReturnButtons(count, busy)
     count = math.max(0, math.floor(tonumber(count) or 0))
     self.returnCount = count
@@ -346,6 +382,29 @@ function Controller:_installNativeInboxHook()
     return false
 end
 
+function Controller:_installNativeOpenMailHook()
+    local installed = false
+    local openMailFrame = _G and _G.OpenMailFrame
+    if openMailFrame and type(openMailFrame.HookScript) == "function"
+        and not self.nativeOpenMailShowHookInstalled then
+        openMailFrame:HookScript("OnShow", function()
+            if self.enabled then self:RefreshNativeTakeButton() end
+        end)
+        self.nativeOpenMailShowHookInstalled = true
+        installed = true
+    end
+    if _G and type(_G.hooksecurefunc) == "function"
+        and type(_G.OpenMail_Update) == "function"
+        and not self.nativeOpenMailUpdateHookInstalled then
+        _G.hooksecurefunc("OpenMail_Update", function()
+            if self.enabled then self:RefreshNativeTakeButton() end
+        end)
+        self.nativeOpenMailUpdateHookInstalled = true
+        installed = true
+    end
+    return installed
+end
+
 function Controller:_ensureRepository()
     if self.repository then return self.repository end
     if self.deps.repository then
@@ -389,6 +448,10 @@ function Controller:_onQueueChanged(state)
             local chat = _G and _G.DEFAULT_CHAT_FRAME
             if chat and type(chat.AddMessage) == "function" then chat:AddMessage(message) end
         end
+    end
+    if state then
+        self.nativeTakeBusy = TERMINAL_STATES[state.state] ~= true
+        self:RefreshNativeTakeButton()
     end
     if state and TERMINAL_STATES[state.state] then self:MarkDirty("QUEUE_TERMINAL") end
 end
@@ -447,6 +510,74 @@ function Controller:_handleEntryClick(entry, mouseButton)
         local _, enqueueError = queue:Enqueue(entry, mode)
         if enqueueError then self:_reportError(enqueueError) end
     end
+end
+
+function Controller:RequestTakeOpenMail()
+    if not self.enabled or not self.active or self.nativeTakeBusy then return false end
+    local mailIndex = tonumber(_G and _G.InboxFrame and _G.InboxFrame.openMailID)
+    if not mailIndex or mailIndex <= 0 then
+        local err = newError("MAIL_NOT_OPEN", "当前没有打开的邮件。")
+        self:_reportError(err)
+        return nil, err
+    end
+
+    local repository = self:_ensureRepository()
+    if not repository or type(repository.Snapshot) ~= "function" then
+        local err = newError("MISSING_DEPENDENCY", "邮件仓库尚不可用。")
+        self:_reportError(err)
+        return nil, err
+    end
+    local snapshot, snapshotError = repository:Snapshot()
+    if not snapshot then
+        self:_reportError(snapshotError)
+        return nil, snapshotError
+    end
+
+    local mail
+    for index = 1, #(snapshot.mails or {}) do
+        if snapshot.mails[index].index == mailIndex then
+            mail = snapshot.mails[index]
+            break
+        end
+    end
+    if not mail then
+        local err = newError("MAIL_MOVED", "当前邮件已变化，请重新打开后再收取。")
+        self:_reportError(err)
+        return nil, err
+    end
+    if (tonumber(mail.cod) or 0) > 0
+        or (mail.capabilities and mail.capabilities.isCOD == true) then
+        local err = newError("COD_REQUIRES_CONFIRMATION", "付款取件邮件需要逐件确认，不能一键收取。")
+        self:_reportError(err)
+        return nil, err
+    end
+    if mail.attachmentsComplete ~= true then
+        local err = newError("SNAPSHOT_INCOMPLETE", "邮件附件资料尚未完整，请稍后重试。")
+        self:_reportError(err)
+        return nil, err
+    end
+
+    local sources = {}
+    for index = 1, #(mail.attachments or {}) do
+        sources[#sources + 1] = mail.attachments[index]
+    end
+    if mail.moneySource then sources[#sources + 1] = mail.moneySource end
+    if #sources == 0 then
+        local err = newError("SOURCE_MISSING", "当前邮件没有可收取的物品或钱币。")
+        self:_reportError(err)
+        self:RefreshNativeTakeButton()
+        return nil, err
+    end
+
+    local queue = self:_ensureQueue()
+    if not queue or type(queue.Enqueue) ~= "function" then
+        local err = newError("MISSING_DEPENDENCY", "收件队列尚不可用。")
+        self:_reportError(err)
+        return nil, err
+    end
+    local operationId, enqueueError = queue:Enqueue(sources, "all_sources")
+    if not operationId then self:_reportError(enqueueError) end
+    return operationId, enqueueError
 end
 
 function Controller:_ensureView()
@@ -701,11 +832,15 @@ end
 function Controller:OnSessionStart(payload)
     if not self.enabled then return end
     self.active = true
+    self:_ensureNativeTakeButton()
+    self:_installNativeOpenMailHook()
     local queue = self:_ensureQueue()
     if queue and type(queue.SetAccepting) == "function" then queue:SetAccepting(true) end
     local view = self:_ensureView()
     if view and type(view.SetEnabled) == "function" then view:SetEnabled(true) end
     self:_setReturnButtons(self.returnCount, false)
+    if self.nativeTakeButton then self.nativeTakeButton:Show() end
+    self:RefreshNativeTakeButton()
     self:RefreshNativeInboxLabels()
     self:MarkDirty(payload and payload.reason or "MAIL_SESSION_STARTED")
 
@@ -721,6 +856,8 @@ function Controller:OnSessionStop(payload)
     if view and type(view.Hide) == "function" then view:Hide() end
     self:_hideNativeInboxLabels()
     self:_setReturnButtons(0, false)
+    self.nativeTakeBusy = false
+    self:RefreshNativeTakeButton()
 end
 
 function Controller:OnWoWEvent(event, ...)
@@ -730,6 +867,7 @@ function Controller:OnWoWEvent(event, ...)
     end
     if event == "MAIL_INBOX_UPDATE" or event == "MAIL_SHOW" or event == "MAIL_SUCCESS" then
         self:RefreshNativeInboxLabels()
+        self:RefreshNativeTakeButton()
     end
 end
 
@@ -742,7 +880,11 @@ function Controller:Enable(context)
     self:_ensureQueue()
     local nativeReturnButton = self:_ensureNativeReturnButton()
     if nativeReturnButton then nativeReturnButton:Show() end
+    local nativeTakeButton = self:_ensureNativeTakeButton()
+    if nativeTakeButton then nativeTakeButton:Show() end
     self:_installNativeInboxHook()
+    self:_installNativeOpenMailHook()
+    self:RefreshNativeTakeButton()
     local view = self:_ensureView()
     if not view then
         self.enabled = false
@@ -824,6 +966,8 @@ function Controller:Disable(context)
     end
     self:_hideNativeInboxLabels()
     if self.nativeReturnButton then self.nativeReturnButton:Hide() end
+    self.nativeTakeBusy = false
+    if self.nativeTakeButton then self.nativeTakeButton:Hide() end
     return true
 end
 
