@@ -195,6 +195,7 @@ local function GetDaily(itemID, itemName)
 end
 
 local HISTORY_FRESH_SECONDS = 24 * 60 * 60
+local RECENT_PRICE_WINDOW_SECONDS = 30 * 60
 
 local function NormalizeHistoryRecord(row, fallbackTime)
     if type(row) ~= "table" then
@@ -227,10 +228,12 @@ local function SelectHistoryRecord(history)
     local rows = type(history.records) == "table" and history.records or history
     local fallbackTime = tonumber(history.updatedAt or history.lastUpdated or history.time
         or history.t or history.lastScanT or history.timestamp or history.observedAt)
-    local freshest, cheapest, seen = nil, nil, 0
+    local freshest, cheapest, recent, seen = nil, nil, nil, 0
+    local entries = {}
     for _, row in ipairs(rows) do
         local entry = NormalizeHistoryRecord(row, fallbackTime)
         if entry then
+            entries[#entries + 1] = entry
             seen = seen + 1
             if not cheapest or entry.unit < cheapest.unit
                     or (entry.unit == cheapest.unit and entry.time and (not cheapest.time or entry.time > cheapest.time)) then
@@ -244,6 +247,17 @@ local function SelectHistoryRecord(history)
             end
         end
     end
+    if freshest and freshest.time then
+        local cutoff = freshest.time - RECENT_PRICE_WINDOW_SECONDS
+        for _, entry in ipairs(entries) do
+            if entry.time and entry.time >= cutoff
+                    and (not recent or entry.unit < recent.unit
+                        or (entry.unit == recent.unit and entry.time > recent.time)) then
+                recent = entry
+            end
+        end
+    end
+    freshest = recent or freshest
     if not freshest and not cheapest then
         local unit = tonumber(history.minUnit or history.unit or history.price)
         if unit and unit > 0 then

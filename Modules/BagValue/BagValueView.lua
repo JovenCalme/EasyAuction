@@ -261,7 +261,7 @@ function View:Create(parent)
         frame.search = createFrame(create, "EditBox", nil, frame, "InputBoxTemplate")
     end
     frame.search:SetSize(300, 24)
-    frame.search:SetPoint("TOPLEFT", frame, "TOPLEFT", 19, -111)
+    frame.search:SetPoint("TOPLEFT", frame, "TOPLEFT", 30, -111)
     frame.search:SetAutoFocus(false)
     if frame.search.SetInstructions then frame.search:SetInstructions("搜索物品") end
     if _G.EasyAuctionStyle and _G.EasyAuctionStyle.SkinEditBox then
